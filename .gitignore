@@ -1,0 +1,8 @@
+ECHO is on.
+*.filters
+*.user
+*.vcxproj
+*.csv
+RollingStat.h
+MonteCarlo.h
+/x64
