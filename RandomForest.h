@@ -2,6 +2,11 @@
 
 #include "DecisionTree.h"
 
+struct featureImportance {
+	std::string feature;
+	double weight;
+};
+
 class RandomForest {
 private:
 	std::vector<DecisionTree> trees;
@@ -51,9 +56,9 @@ public:
 		}
 	}
 
-	std::tuple<double, double, double> predict(const std::vector<double>& predictors) const {
+	std::tuple<double, double, double, double, double> predict(const std::vector<double>& predictors) const {
 		if (trees.size() == 0) 
-			return std::tuple{ 0.0, 0.0, 0.0 };
+			return std::tuple{ 0.0, 0.0, 0.0, 0.0, 0.0 };
 		std::vector<double> predictions(trees.size());
 		std::vector<double> all_samples;
 		int i = 0;
@@ -64,42 +69,62 @@ public:
 				all_samples.push_back(elem);
 			}
 		}
-		double avg = std::accumulate(std::begin(predictions), std::end(predictions), 0);
+		/*for (auto elem : all_samples) std::cout << elem << " ";
+		std::cout << "\n";*/
+		double avg = std::accumulate(std::begin(predictions), std::end(predictions), 0.0);
 		avg /= (double)trees.size();
 		std::sort(std::begin(all_samples), std::end(all_samples));
-		double lower_bound = all_samples[std::floor(0.10 * (all_samples.size() - 1))];
-		double upper_bound = all_samples[std::floor(0.90 * (all_samples.size() - 1))];
-		return std::tuple{ avg, lower_bound, upper_bound };
-	}
+		int over_210{ 0 }, over_220{ 0 }, over_230{ 0 }, over_240{ 0 };
+		for (auto elem : all_samples) {
+			if (elem >= 240) {
+				++over_240; ++over_230; ++over_220; ++over_210;
+			}
+			else if (elem >= 230) {
+				++over_230; ++over_220; ++over_210;
+			}
+			else if (elem >= 220) {
+				++over_220; ++over_210;
+			}
+			else if (elem >= 210) {
+				++over_210;
+			}
 
-	/*double predict(const std::vector<double>& predictors) const {
-		std::vector<double> predictions(trees.size());
-		std::vector<double> all_samples;
-		int i = 0;
-		for (const DecisionTree& tree : trees) {
-			auto [pred, _] = tree.predict(predictors);
-			predictions[i++] = pred;
 		}
-		double avg = std::accumulate(std::begin(predictions), std::end(predictions), 0);
-		avg /= (double)trees.size();
-		std::sort(std::begin(all_samples), std::end(all_samples));
-		return avg;
-	}*/
+		double under_game = (over_210 / (double)(all_samples.size()));
+		double mid_scoring_game = (over_220 / (double)(all_samples.size()));
+		double high_scoring_game = (over_230 / (double)(all_samples.size()));
+		double blowouts = (over_240 / (double)(all_samples.size()));
+		return std::tuple{ avg, under_game, mid_scoring_game, high_scoring_game, blowouts };
+	}
+ 
+	std::vector<featureImportance> computeFeatureImportances() {
+		std::unordered_map<std::string, double> importance_map;
 
-	std::unordered_map<std::string, double> computeFeatureImportances() {
-		std::unordered_map<std::string, double> total;
 		for (const auto& tree : trees) {
 			auto imp = tree.get_feature_importance();
 			for (auto& [feature, score] : imp) {
-				total[feature] += score;
+				importance_map[feature] += score;
 			}
 		}
-		double sum = 0;
-		for (auto& [_, score] : total) sum += score;
-		if (sum > 0) {
-			for (auto& [_, score] : total) score /= sum;
+		std::vector<featureImportance> features;
+		double sum = 0.0;
+
+		for (const auto& featureName : keynames) {
+			double weight = importance_map.count(featureName) ? importance_map.at(featureName) : 0.0;
+			features.push_back({ featureName, weight });
+			sum += weight;
 		}
-		return total;
+
+		if (sum > 0.0) {
+			for (auto& f : features) f.weight /= sum;
+		}
+
+		std::sort(std::begin(features), std::end(features),
+			[](const featureImportance& a, const featureImportance& b) {
+				return a.weight > b.weight;
+			});
+
+		return features;
 	}
 
 	void save(const std::string& model_file) {

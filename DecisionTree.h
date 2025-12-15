@@ -13,11 +13,10 @@
 #include <chrono>
 
 
-using dataframe = std::unordered_map<std::string, std::vector<double>>;
 std::vector<std::string> keynames;
 
 template <typename T>
-using matrix = std::vector<std::vector<T>>;	
+using matrix = std::vector<std::vector<T>>;
 
 
 //helper functions
@@ -53,49 +52,45 @@ double evaluate_Huber_RMSE(const std::vector<double>& Y_test, const std::vector<
 }
 
 
-dataframe load_data(const std::string& filename) {
-	auto split = [](const std::string& str, char delimiter) {
-		std::vector<std::string> fields;
-		std::stringstream ss(str);
-		std::string field;
-
-		while (std::getline(ss, field, delimiter)) {
-			fields.push_back((field));
-		}
-		return fields;
-	};
-
-	std::fstream file{ filename, std::ios_base::in };
-	dataframe spreadsheet;
-	std::vector<std::string> header_names;
-
-	std::string line;
-	std::getline(file, line);
-	for (std::string key : split(line, ',')) {
-		header_names.push_back(key);
-		spreadsheet[key] = std::vector<double>{};
-	}
-	for (int i = 5; i < header_names.size() - 1; ++i) {
-		// std::cout << header_names[i] << "\n";
-		keynames.push_back(header_names[i]);
-	}
-
-	while (std::getline(file, line)) {
-		std::vector<std::string> row = split(line, ',');
-		for (size_t i{ 0 }; i < row.size(); ++i) {
-			double value;
-			try {
-				value = row[i].empty() ? -1 : std::stod(row[i]);
-			}
-			catch (...) {
-				value = -1;
-			}
-			spreadsheet[header_names[i]].push_back(value);
-		}
-	}
-	return spreadsheet;
-	file.close();
-}
+//dataframe load_data(const std::string& filename) {
+//	auto split = [](const std::string& str, char delimiter) {
+//		std::vector<std::string> fields;
+//		std::stringstream ss(str);
+//		std::string field;
+//
+//		while (std::getline(ss, field, delimiter)) {
+//			fields.push_back((field));
+//		}
+//		return fields;
+//		};
+//
+//	std::fstream file{ filename, std::ios_base::in };
+//	dataframe spreadsheet;
+//	std::vector<std::string> header_names;
+//
+//	std::string line;
+//	std::getline(file, line);
+//	for (std::string key : split(line, ',')) {
+//		header_names.push_back(key);
+//		spreadsheet[key] = std::vector<double>{};
+//	}
+//
+//	while (std::getline(file, line)) {
+//		std::vector<std::string> row = split(line, ',');
+//		for (size_t i{ 0 }; i < row.size(); ++i) {
+//			double value;
+//			try {
+//				value = row[i].empty() ? -1 : std::stod(row[i]);
+//			}
+//			catch (...) {
+//				value = -1;
+//			}
+//			spreadsheet[header_names[i]].push_back(value);
+//		}
+//	}
+//	return spreadsheet;
+//	file.close();
+//}
 
 std::tuple<matrix<double>, matrix<double>, std::vector<double>, std::vector<double>>
 train_test_split(const matrix<double>& X, const std::vector<double>& Y, double test_size = 0.05, bool time_based = true, int random_state = -1) {
@@ -106,14 +101,14 @@ train_test_split(const matrix<double>& X, const std::vector<double>& Y, double t
 	std::mt19937 mt(seed);
 
 	if (!time_based)
-	std::shuffle(std::begin(indices), std::end(indices), mt);
+		std::shuffle(std::begin(indices), std::end(indices), mt);
 
 	matrix<double> X_train, X_test;
 	std::vector<double> Y_train, Y_test;
 
 	size_t split = Y.size() * (1 - test_size);
 
-	
+
 	for (int i = 0; i < split; ++i) {
 		Y_train.push_back(Y[indices[i]]);
 		X_train.push_back(X[indices[i]]);
@@ -139,7 +134,8 @@ struct TreeNode {
 	TreeNode* right;
 
 	TreeNode() : is_leaf{ false }, feature_index{ -1 }, split_value{ -1 }, prediction{ -1 },
-		left{ nullptr }, right{ nullptr } {}
+		left{ nullptr }, right{ nullptr } {
+	}
 
 	~TreeNode() {
 		if (left)  delete left;
@@ -161,7 +157,7 @@ private:
 		double n = (double)(labels.size());
 		if (n == 0) return 0.0;
 		double mean = std::accumulate(std::begin(labels), std::end(labels), 0) / n;
-		
+
 		double mse = 0;
 		for (auto elem : labels) {
 			double diff = elem - mean;
@@ -192,7 +188,7 @@ private:
 
 		size_t number_of_features = X[0].size();
 
-		if (feature_sample_ratio > 1.0) 
+		if (feature_sample_ratio > 1.0)
 			feature_sample_ratio = 1.0;
 
 		int nFeatures = std::max(1, (int)std::round(feature_sample_ratio * number_of_features));
@@ -220,7 +216,7 @@ private:
 			for (double value : values) {
 				auto [left_indices, right_indices] = split_data(X, indices, feature_idx, value);
 				if (left_indices.size() < min_samples_leaf || right_indices.size() < min_samples_leaf) continue;
-				
+
 				std::vector<double> left_label, right_label;
 				for (auto idx : left_indices) left_label.push_back(Y[idx]);
 				for (auto idx : right_indices) right_label.push_back(Y[idx]);
@@ -408,8 +404,9 @@ private:
 public:
 	DecisionTree(int max_depth = 5, int min_samples_split = 4, int min_samples_leaf = 1, double feature_sample_ratio = 1.0, std::string loss = "MSE") :
 		root{ nullptr }, max_depth{ max_depth }, min_samples_split{ min_samples_split }, min_samples_leaf{ min_samples_leaf },
-		feature_sample_ratio{ feature_sample_ratio }, loss{ loss } 
-	{}
+		feature_sample_ratio{ feature_sample_ratio }, loss{ loss }
+	{
+	}
 
 	DecisionTree(const DecisionTree& other) {
 		if (!other.root)
@@ -423,10 +420,10 @@ public:
 		feature_importance = other.feature_importance;
 	}
 
-	DecisionTree (DecisionTree&& other) noexcept {
+	DecisionTree(DecisionTree&& other) noexcept {
 		if (other.root)
 			root = std::exchange(other.root, nullptr);
-		else 
+		else
 			root = nullptr;
 		std::swap(max_depth, other.max_depth);
 		std::swap(min_samples_split, other.min_samples_split);
@@ -451,7 +448,7 @@ public:
 	DecisionTree& operator=(DecisionTree&& other) noexcept {
 		if (other.root)
 			root = std::exchange(other.root, nullptr);
-		else 
+		else
 			root = nullptr;
 		std::swap(max_depth, other.max_depth);
 		std::swap(min_samples_split, other.min_samples_split);
