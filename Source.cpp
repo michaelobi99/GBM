@@ -15,7 +15,6 @@
 int calculate_day_difference(const std::string& date_str) {
 	int day, month, year;
 
-	// Use sscanf to safely parse the fixed DD.MM.YYYY format
 	if (std::sscanf(date_str.c_str(), "%d.%d.%d", &day, &month, &year) != 3) {
 		std::cerr << "Error parsing string value as date\n";
 		exit(1);
@@ -228,7 +227,7 @@ int main() {
 	booster.load(gbm_model_file);
 
 	std::vector<std::string> home_features = {
-		"H_2FG%", "H_3FG%",  "H_FT%",
+		"H_FG%", "H_2FG%", "H_3FG%", "H_FT%",
 		"H_OFF_RATING", "H_DEF_RATING", "H_REST_DAYS",
 		"H_FG%_ALLOWED", "H_2FG%_ALLOWED", "H_3FG%_ALLOWED", "H_TOV_ALLOWED",
 		"H_2FG_RATE", "H_3FG_RATE", "H_FT_RATE",
@@ -236,9 +235,10 @@ int main() {
 		"H_EFG%",
 		"H_PPP",
 		"H_TS%",
+		"H_POSS",
 	};
 	std::vector<std::string> away_features = {
-		"A_2FG%", "A_3FG%", "A_FT%",
+		"A_FG%", "A_2FG%", "A_3FG%", "A_FT%",
 		"A_OFF_RATING", "A_DEF_RATING", "A_REST_DAYS",
 		"A_FG%_ALLOWED", "A_2FG%_ALLOWED", "A_3FG%_ALLOWED", "A_TOV_ALLOWED",
 		"A_2FG_RATE", "A_3FG_RATE", "A_FT_RATE",
@@ -246,12 +246,13 @@ int main() {
 		"A_EFG%",
 		"A_PPP",
 		"A_TS%",
+		"A_POSS",
 	};
 
 	dataframe basketball_data = load_data(filename);
 	dataframe predictor;
-
 	std::vector<std::tuple<std::string, std::string>> matches = get_matches();
+
 
 	for (const auto& [home, away] : matches) {
 		get_lagged_predictor_values(home_features, away_features, home, predictor, basketball_data);
@@ -278,7 +279,7 @@ int main() {
 		predictor["REST_DIFF"] = predictor["H_REST_DAYS"] - predictor["A_REST_DAYS"];
 		predictor["PACE_X_NET_RATING"] = predictor["GAME_PACE"] * predictor["NET_RATING_DIFF"];
 		predictor["PACE_X_EFFICIENCY"] = predictor["GAME_PACE"] * predictor["AVG_TS%"];
-
+		
 		matrix<double> X;
 		X.assign(1, std::vector<double>(predictor.size()));
 		
@@ -286,9 +287,9 @@ int main() {
 			X[0][i] = predictor[predictors[i]].to_float()[0];
 		}
 		std::cout << home << " VS " << away << ": \n";
-		auto [pred, low, mid, high, blowout] = forest.predict(X[0]);
+		auto [pred1, low, mid, high, blowout] = forest.predict(X[0]);
 		auto pred2 = booster.predict(X[0]);
-		std::cout << "forest prediction: " << pred << "\n";
+		std::cout << "forest prediction: " << pred1 << "\n";
 		std::cout << "GBM prediction: " << pred2 << "\n";
 		std::string lines(45, '-');
 		std::cout << std::left << std::setw(15) << "Score Range" << std::left << std::setw(15) << "Probability" << "Odds\n";
