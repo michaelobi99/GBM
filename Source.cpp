@@ -115,15 +115,13 @@ void get_lagged_predictor_values(const std::vector<std::string>& home_features, 
 				predictor[key] = std::vector<std::string>{ data[key][index] };
 		}
 	}
-	
 }
-
 
 void gbm_thread(
 	matrix<double> X_train, matrix<double> X_test, std::vector<double> Y_train, std::vector<double> Y_test, std::string gbm_model_file)
 {
-	//GradientBoosting booster(1000, 0.01, 8, 8, 7, 1.0, "HUBER");
-	GradientBoosting booster(1000, 0.05, 7, 15, 10, 1.0);
+	//GradientBoosting booster(800, 0.01, 8, 8, 7, 1.0, "HUBER");
+	GradientBoosting booster(800, 0.01, 8, 5, 2, 1.0);
 	booster.fit(X_train, Y_train);
 
 	std::vector<double> preds2;
@@ -144,25 +142,25 @@ int main() {
 		// "H_3FGA", "A_3FGA", "H_3FG", "A_3FG", 
 		// "H_FTA", "A_FTA", "H_FT", "A_FT", "H_OREB", "A_OREB", "H_DREB", "A_DREB", "H_TREB", "A_TREB", "H_AST", "A_AST", "H_BLKS", "A_BLKS",
 		// "H_TOV", "A_TOV", "H_STL", "A_STL", "H_P_FOULS", "A_P_FOULS",
-		// "H_POSS", "A_POSS", 
+		// "H_POSS", "A_POSS", "H_2FG_RATE", "A_2FG_RATE", 
+		// "H_PPP", "A_PPP", "H_EXPECTED_SCORE", "A_EXPECTED_SCORE",
 
 		"H_2FG%", "A_2FG%", "H_3FG%", "A_3FG%",  "H_FT%", "A_FT%",
 		"H_OFF_RATING", "A_OFF_RATING", "H_DEF_RATING", "A_DEF_RATING", "H_REST_DAYS", "A_REST_DAYS",
 		"H_FG%_ALLOWED", "A_FG%_ALLOWED", "H_2FG%_ALLOWED", "A_2FG%_ALLOWED", "H_3FG%_ALLOWED", "A_3FG%_ALLOWED", "H_TOV_ALLOWED", "A_TOV_ALLOWED",
-		"H_2FG_RATE", "A_2FG_RATE", "H_3FG_RATE", "A_3FG_RATE", "H_FT_RATE", "A_FT_RATE",
+		"H_3FG_RATE", "A_3FG_RATE", "H_FT_RATE", "A_FT_RATE",
 		"H_TOV_RATE", "A_TOV_RATE", "H_OREB_RATE", "A_OREB_RATE", "H_DREB_RATE", "A_DREB_RATE",
 		"H_EFG%", "A_EFG%",
 		"GAME_PACE",
-		"H_PPP", "A_PPP",
 		"H_TS%", "A_TS%", "AVG_TS%",
 		"H_OFF_VS_A_DEF", "A_OFF_VS_H_DEF", "H_FG%_VS_A_ALLOWED", "A_FG%_VS_H_ALLOWED", "H_2FG%_VS_A_ALLOWED", "A_2FG%_VS_H_ALLOWED", "H_3FG%_VS_A_ALLOWED", "A_3FG%_VS_H_ALLOWED",
 		"H_TS%_VS_A_DEF", "A_TS%_VS_H_DEF",
-		"H_EXPECTED_SCORE", "A_EXPECTED_SCORE", "EXPECTED_TOTAL",
+		"EXPECTED_TOTAL",
 		"H_NET_RATING", "A_NET_RATING", "NET_RATING_DIFF",
 		"REST_DIFF", "PACE_X_NET_RATING", "PACE_X_EFFICIENCY",
 	};
 
-	/*
+	
 	dataframe basketball_data = load_data(R"(C:\Users\HP\source\repos\Rehoboam\Rehoboam\Data\Basketball\nba\data_file.csv)");
 
 	matrix<double> X;
@@ -184,23 +182,20 @@ int main() {
 
 	auto [X_train, X_test, Y_train, Y_test] = train_test_split(X, Y);
 
-
 	std::string forest_model_file = R"(C:\Users\HP\source\repos\Rehoboam\Rehoboam\Data\Basketball\nba\Forest_model.bin)";
 	std::string gbm_model_file = R"(C:\Users\HP\source\repos\Rehoboam\Rehoboam\Data\Basketball\nba\GBM_model.bin)";
 
-	std::vector<std::tuple<std::string, std::string>> matches = get_matches();
-
 	std::thread worker = std::thread(gbm_thread, X_train, X_test, Y_train, Y_test, gbm_model_file);
 
-	double feature_ratio = 0.4;
-	RandomForest forest(600, 20, 10, 5, feature_ratio);
+	double feature_ratio = 0.3;
+	RandomForest forest(500, 25, 6, 2, feature_ratio);
 	forest.fit(X_train, Y_train);
 
 	std::vector<double> preds1;
 	for (auto i{ 0u }; i < X_test.size(); ++i) {
 		auto [val, _1, _2, _3, _4] = forest.predict(X_test[i]);
 		preds1.push_back(val);
-		std::cout << "Real value: " << Y_test[i] << " - Forest Prediction : " << val << "\n";
+		std::cout << "Real value: " << Y_test[i] << " - Forest Prediction : " << val << " ("<<_1<<","<<_2<<","<<_3<<","<<_4<<")\n";
 	}
 
 	std::cout << "Forest RMSE: " << evaluate_RMSE(Y_test, preds1) << "\n";
@@ -210,12 +205,13 @@ int main() {
 	for (const auto& [feature, importance] : forest.computeFeatureImportances()) {
 		std::cout << feature << ": " << importance << "\n\n";
 	}
-
+	
 	worker.join();
-	*/
-
+	
+	
 	//........................................................................................................
 	//Load saved models
+	/*
 	std::string forest_model_file = R"(C:\Users\HP\source\repos\Rehoboam\Rehoboam\Data\Basketball\nba\Forest_model.bin)";
 	std::string gbm_model_file = R"(C:\Users\HP\source\repos\Rehoboam\Rehoboam\Data\Basketball\nba\GBM_model.bin)";
 	std::string filename = R"(C:\Users\HP\source\repos\Rehoboam\Rehoboam\Data\Basketball\nba\data_file.csv)";
@@ -230,10 +226,9 @@ int main() {
 		"H_FG%", "H_2FG%", "H_3FG%", "H_FT%",
 		"H_OFF_RATING", "H_DEF_RATING", "H_REST_DAYS",
 		"H_FG%_ALLOWED", "H_2FG%_ALLOWED", "H_3FG%_ALLOWED", "H_TOV_ALLOWED",
-		"H_2FG_RATE", "H_3FG_RATE", "H_FT_RATE",
+		"H_3FG_RATE", "H_FT_RATE",
 		"H_TOV_RATE", "H_OREB_RATE", "H_DREB_RATE",
 		"H_EFG%",
-		"H_PPP",
 		"H_TS%",
 		"H_POSS",
 	};
@@ -241,10 +236,9 @@ int main() {
 		"A_FG%", "A_2FG%", "A_3FG%", "A_FT%",
 		"A_OFF_RATING", "A_DEF_RATING", "A_REST_DAYS",
 		"A_FG%_ALLOWED", "A_2FG%_ALLOWED", "A_3FG%_ALLOWED", "A_TOV_ALLOWED",
-		"A_2FG_RATE", "A_3FG_RATE", "A_FT_RATE",
+		"A_3FG_RATE", "A_FT_RATE",
 		"A_TOV_RATE", "A_OREB_RATE", "A_DREB_RATE",
 		"A_EFG%",
-		"A_PPP",
 		"A_TS%",
 		"A_POSS",
 	};
@@ -286,18 +280,24 @@ int main() {
 		for (int i = 0; i < predictors.size(); ++i) {
 			X[0][i] = predictor[predictors[i]].to_float()[0];
 		}
+
 		std::cout << home << " VS " << away << ": \n";
-		auto [pred1, low, mid, high, blowout] = forest.predict(X[0]);
+		auto [pred1, prob_210, prob_220, prob_230, prob_240] = forest.predict(X[0]);
 		auto pred2 = booster.predict(X[0]);
+
 		std::cout << "forest prediction: " << pred1 << "\n";
 		std::cout << "GBM prediction: " << pred2 << "\n";
+
 		std::string lines(45, '-');
 		std::cout << std::left << std::setw(15) << "Score Range" << std::left << std::setw(15) << "Probability" << "Odds\n";
 		std::cout << lines << "\n";
-		std::cout << std::left << std::setw(15) << "[over 210.5]" << std::left << std::setw(15) << low << 1.0 / low << "\n";
-		std::cout << std::left << std::setw(15) << "[over 220.5]" << std::left << std::setw(15) << mid << 1.0 / mid << "\n";
-		std::cout << std::left << std::setw(15) << "[over 230.5]" << std::left << std::setw(15) << high << 1.0 / high << "\n";
-		std::cout << std::left << std::setw(15) << "[over 240.5]" << std::left << std::setw(15) << blowout << 1.0 / blowout << "\n\n";
+
+		// Use descriptive variables and print the odds column correctly
+		std::cout << std::left << std::setw(15) << "[over 210.5]" << std::left << std::setw(15) << prob_210 << 1.0 / prob_210 << "\n";
+		std::cout << std::left << std::setw(15) << "[over 220.5]" << std::left << std::setw(15) << prob_220 << 1.0 / prob_220 << "\n";
+		std::cout << std::left << std::setw(15) << "[over 230.5]" << std::left << std::setw(15) << prob_230 << 1.0 / prob_230 << "\n";
+		std::cout << std::left << std::setw(15) << "[over 240.5]" << std::left << std::setw(15) << prob_240 << 1.0 / prob_240 << "\n\n";
 	}
+	*/
 	//.......................................................................................................
 }

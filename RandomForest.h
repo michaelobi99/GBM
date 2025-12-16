@@ -57,11 +57,13 @@ public:
 	}
 
 	std::tuple<double, double, double, double, double> predict(const std::vector<double>& predictors) const {
-		if (trees.size() == 0) 
+		if (trees.size() == 0)
 			return std::tuple{ 0.0, 0.0, 0.0, 0.0, 0.0 };
+
 		std::vector<double> predictions(trees.size());
 		std::vector<double> all_samples;
 		int i = 0;
+
 		for (const DecisionTree& tree : trees) {
 			auto [pred, sample_indices] = tree.predict(predictors);
 			predictions[i++] = pred;
@@ -69,32 +71,27 @@ public:
 				all_samples.push_back(elem);
 			}
 		}
-		/*for (auto elem : all_samples) std::cout << elem << " ";
-		std::cout << "\n";*/
 		double avg = std::accumulate(std::begin(predictions), std::end(predictions), 0.0);
 		avg /= (double)trees.size();
-		std::sort(std::begin(all_samples), std::end(all_samples));
-		int over_210{ 0 }, over_220{ 0 }, over_230{ 0 }, over_240{ 0 };
-		for (auto elem : all_samples) {
-			if (elem >= 240) {
-				++over_240; ++over_230; ++over_220; ++over_210;
-			}
-			else if (elem >= 230) {
-				++over_230; ++over_220; ++over_210;
-			}
-			else if (elem >= 220) {
-				++over_220; ++over_210;
-			}
-			else if (elem >= 210) {
-				++over_210;
-			}
 
+		if (all_samples.empty()) {
+			return std::tuple{ avg, 0.0, 0.0, 0.0, 0.0 };
 		}
-		double under_game = (over_210 / (double)(all_samples.size()));
-		double mid_scoring_game = (over_220 / (double)(all_samples.size()));
-		double high_scoring_game = (over_230 / (double)(all_samples.size()));
-		double blowouts = (over_240 / (double)(all_samples.size()));
-		return std::tuple{ avg, under_game, mid_scoring_game, high_scoring_game, blowouts };
+		int over_210_count{ 0 }, over_220_count{ 0 }, over_230_count{ 0 }, over_240_count{ 0 };
+
+		for (auto elem : all_samples) {
+			if (elem >= 210) ++over_210_count;
+			if (elem >= 220) ++over_220_count;
+			if (elem >= 230) ++over_230_count;
+			if (elem >= 240) ++over_240_count;
+		}
+		double total_samples = (double)all_samples.size();
+		double prob_over_210 = over_210_count / total_samples;
+		double prob_over_220 = over_220_count / total_samples;
+		double prob_over_230 = over_230_count / total_samples;
+		double prob_over_240 = over_240_count / total_samples;
+
+		return std::tuple{ avg, prob_over_210, prob_over_220, prob_over_230, prob_over_240 };
 	}
  
 	std::vector<featureImportance> computeFeatureImportances() {

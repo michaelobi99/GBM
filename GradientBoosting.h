@@ -110,7 +110,7 @@ public:
     }
 
     void load(const std::string& model_file) {
-        std::fstream file(model_file, std::ios::in | std::ios::binary);
+        std::fstream file(model_file, std::ios::in);
         if (!file.is_open()) {
             std::cerr << "Error: Could not load model from file." << std::endl;
             return;

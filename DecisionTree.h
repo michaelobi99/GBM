@@ -51,49 +51,8 @@ double evaluate_Huber_RMSE(const std::vector<double>& Y_test, const std::vector<
 	return std::sqrt(huber_sum / static_cast<double>(Y_test.size()));
 }
 
-
-//dataframe load_data(const std::string& filename) {
-//	auto split = [](const std::string& str, char delimiter) {
-//		std::vector<std::string> fields;
-//		std::stringstream ss(str);
-//		std::string field;
-//
-//		while (std::getline(ss, field, delimiter)) {
-//			fields.push_back((field));
-//		}
-//		return fields;
-//		};
-//
-//	std::fstream file{ filename, std::ios_base::in };
-//	dataframe spreadsheet;
-//	std::vector<std::string> header_names;
-//
-//	std::string line;
-//	std::getline(file, line);
-//	for (std::string key : split(line, ',')) {
-//		header_names.push_back(key);
-//		spreadsheet[key] = std::vector<double>{};
-//	}
-//
-//	while (std::getline(file, line)) {
-//		std::vector<std::string> row = split(line, ',');
-//		for (size_t i{ 0 }; i < row.size(); ++i) {
-//			double value;
-//			try {
-//				value = row[i].empty() ? -1 : std::stod(row[i]);
-//			}
-//			catch (...) {
-//				value = -1;
-//			}
-//			spreadsheet[header_names[i]].push_back(value);
-//		}
-//	}
-//	return spreadsheet;
-//	file.close();
-//}
-
 std::tuple<matrix<double>, matrix<double>, std::vector<double>, std::vector<double>>
-train_test_split(const matrix<double>& X, const std::vector<double>& Y, double test_size = 0.05, bool time_based = true, int random_state = -1) {
+train_test_split(const matrix<double>& X, const std::vector<double>& Y, double test_size = 0.15, bool time_based = true, int random_state = -1) {
 	std::vector<int> indices(Y.size(), 0);
 	std::iota(std::begin(indices), std::end(indices), 0);
 	std::random_device rd;
@@ -367,7 +326,7 @@ private:
 		size_t s = node->samples.size();
 		model_file.write(reinterpret_cast<const char*>(&s), sizeof(s));
 		if (s > 0) {
-			model_file.write(reinterpret_cast<const char*>(node->samples.data()), s * sizeof(int));
+			model_file.write(reinterpret_cast<const char*>(node->samples.data()), s * sizeof(double));
 		}
 		//serialize children recursively
 		if (!node->is_leaf) {
@@ -391,7 +350,7 @@ private:
 		model_file.read(reinterpret_cast<char*>(&s), sizeof(s));
 		if (s > 0) {
 			node->samples.resize(s);
-			model_file.read(reinterpret_cast<char*>(node->samples.data()), s * sizeof(int));
+			model_file.read(reinterpret_cast<char*>(node->samples.data()), s * sizeof(double));
 		}
 		//deserialize children recursively
 		if (!node->is_leaf) {
@@ -507,5 +466,4 @@ public:
 		load(file);
 		file.close();
 	}
-
 };
