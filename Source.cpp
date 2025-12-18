@@ -59,12 +59,12 @@ int calculate_day_difference(const std::string& date_str) {
 
 std::vector<std::tuple<std::string, std::string>> get_matches() {
 	return std::vector<std::tuple<std::string, std::string>>{
-		std::tuple{ "Boston Celtics", "Detroit Pistons" },
-			std::tuple{ "Miami Heat", "Toronto Raptors" },
-			std::tuple{ "Utah Jazz", "Dallas Mavericks" },
+		std::tuple{ "Chicago Bulls", "Cleveland Cavaliers" },
+			std::tuple{ "Minnesota Timberwolves", "Memphis Grizzlies" },
+			/*std::tuple{"Utah Jazz", "Dallas Mavericks"},
 			std::tuple{ "Denver Nuggets", "Houston Rockets" },
 			std::tuple{ "Los Angeles Clippers", "Memphis Grizzlies" },
-			/*std::tuple{"Dallas Mavericks", "Brooklyn Nets"},
+			std::tuple{"Dallas Mavericks", "Brooklyn Nets"},
 			std::tuple{ "Golden State Warriors", "Minnesota Timberwolves" },
 			std::tuple{"Los Angeles Lakers", "New Orleans Pelicans"},
 			std::tuple{"Los Angeles Clippers", "Dallas Mavericks"},
@@ -76,44 +76,84 @@ std::vector<std::tuple<std::string, std::string>> get_matches() {
 
 
 void get_lagged_predictor_values(const std::vector<std::string>& home_features, const std::vector<std::string>& away_features, 
-	std::string team, dataframe& predictor, dataframe& data) {
+	const std::string team, dataframe& predictor, dataframe& data, bool home_team) {
 	std::ostringstream stream;
 	std::vector<std::string> home_teams{ data["HOME"].get_data()};
 	std::vector<std::string> away_teams{ data["AWAY"].get_data()};
 	int index = 0;
 	bool is_home = true;
-	for (int i = home_teams.size() - 1; i >= 0; --i) {
-		if (home_teams[i] == team) {
-			index = i;
+	for (index = home_teams.size() - 1; index >= 0; --index) {
+		if (home_teams[index] == team) {
 			break;
 		}
-		else if (away_teams[i] == team) {
-			index = i;
+		else if (away_teams[index] == team) {
 			is_home = false;
 			break;
 		}
 	}
 	if (is_home) {
-		for (const auto& key : home_features) {
-			if (key == "H_REST_DAYS") {
-				stream << calculate_day_difference(data["DATE"][index]) + 1;
-				predictor[key] = std::vector<std::string>{ stream.str()};
-				stream.str("");
+		if (home_team) {
+			//std::cout << team << ":\n";
+			for (const auto& key : home_features) {
+				//std::cout << key << ": ";
+				if (key == "H_REST_DAYS") {
+					stream << calculate_day_difference(data["DATE"][index]) + 1;
+					predictor[key] = std::vector<std::string>{ stream.str() };
+					stream.str("");
+				}
+				else
+					predictor[key] = std::vector<std::string>{ data[key][index] };
+				//std::cout << predictor[key][0] << "\n";
 			}
-			else
-				predictor[key] = std::vector<std::string>{ data[key][index] };
 		}
+		else {
+			//std::cout << team << ":\n";
+			for (size_t i = 0; i < home_features.size(); ++i) {
+				std::string key = away_features[i];
+				//std::cout << key << ": ";
+				if (key == "A_REST_DAYS") {
+					stream << calculate_day_difference(data["DATE"][index]) + 1;
+					predictor[key] = std::vector<std::string>{ stream.str() };
+					stream.str("");
+				}
+				else
+					predictor[key] = std::vector<std::string>{ data[home_features[i]][index] };
+				//std::cout << predictor[key][0] << "\n";
+			}
+		}
+		
 	}
 	else {
-		for (const auto& key : away_features) {
-			if (key == "A_REST_DAYS") {
-				stream << calculate_day_difference(data["DATE"][index]) + 1;
-				predictor[key] = std::vector<std::string>{ stream.str() };
-				stream.str("");
+		if (home_team) {
+			//std::cout << team << ":\n";
+			for (size_t i = 0; i < home_features.size(); ++i) {
+				std::string key = home_features[i];
+				//std::cout << key << ": ";
+				if (key == "H_REST_DAYS") {
+					stream << calculate_day_difference(data["DATE"][index]) + 1;
+					predictor[key] = std::vector<std::string>{ stream.str() };
+					stream.str("");
+				}
+				else
+					predictor[key] = std::vector<std::string>{ data[away_features[i]][index] };
+				//std::cout << predictor[key][0] << "\n";
 			}
-			else
-				predictor[key] = std::vector<std::string>{ data[key][index] };
 		}
+		else {
+			//std::cout << team << ":\n";
+			for (const auto& key : away_features) {
+				//std::cout << key << ": ";
+				if (key == "A_REST_DAYS") {
+					stream << calculate_day_difference(data["DATE"][index]) + 1;
+					predictor[key] = std::vector<std::string>{ stream.str() };
+					stream.str("");
+				}
+				else
+					predictor[key] = std::vector<std::string>{ data[key][index] };
+				//std::cout << predictor[key][0] << "\n";
+			}
+		}
+		
 	}
 }
 
@@ -121,7 +161,7 @@ void gbm_thread(
 	matrix<double> X_train, matrix<double> X_test, std::vector<double> Y_train, std::vector<double> Y_test, std::string gbm_model_file)
 {
 	//GradientBoosting booster(800, 0.01, 8, 8, 7, 1.0, "HUBER");
-	GradientBoosting booster(800, 0.01, 8, 5, 2, 1.0);
+	GradientBoosting booster(800, 0.05, 6, 20, 10, 1.0);
 	booster.fit(X_train, Y_train);
 
 	std::vector<double> preds2;
@@ -142,25 +182,30 @@ int main() {
 		// "H_3FGA", "A_3FGA", "H_3FG", "A_3FG", 
 		// "H_FTA", "A_FTA", "H_FT", "A_FT", "H_OREB", "A_OREB", "H_DREB", "A_DREB", "H_TREB", "A_TREB", "H_AST", "A_AST", "H_BLKS", "A_BLKS",
 		// "H_TOV", "A_TOV", "H_STL", "A_STL", "H_P_FOULS", "A_P_FOULS",
-		// "H_POSS", "A_POSS", "H_2FG_RATE", "A_2FG_RATE", 
-		// "H_PPP", "A_PPP", "H_EXPECTED_SCORE", "A_EXPECTED_SCORE",
+		// "H_2FG_RATE", "A_2FG_RATE", 
+		// "H_PPP", "A_PPP", 
+		//"H_POSS", "A_POSS",
+		//"H_EXPECTED_SCORE", "A_EXPECTED_SCORE",
+		//"PACE_X_NET_RATING"
+		//"H_EFG%", "A_EFG%",
+		//"NET_RATING_DIFF",
+
 
 		"H_2FG%", "A_2FG%", "H_3FG%", "A_3FG%",  "H_FT%", "A_FT%",
 		"H_OFF_RATING", "A_OFF_RATING", "H_DEF_RATING", "A_DEF_RATING", "H_REST_DAYS", "A_REST_DAYS",
 		"H_FG%_ALLOWED", "A_FG%_ALLOWED", "H_2FG%_ALLOWED", "A_2FG%_ALLOWED", "H_3FG%_ALLOWED", "A_3FG%_ALLOWED", "H_TOV_ALLOWED", "A_TOV_ALLOWED",
 		"H_3FG_RATE", "A_3FG_RATE", "H_FT_RATE", "A_FT_RATE",
 		"H_TOV_RATE", "A_TOV_RATE", "H_OREB_RATE", "A_OREB_RATE", "H_DREB_RATE", "A_DREB_RATE",
-		"H_EFG%", "A_EFG%",
 		"GAME_PACE",
 		"H_TS%", "A_TS%", "AVG_TS%",
-		"H_OFF_VS_A_DEF", "A_OFF_VS_H_DEF", "H_FG%_VS_A_ALLOWED", "A_FG%_VS_H_ALLOWED", "H_2FG%_VS_A_ALLOWED", "A_2FG%_VS_H_ALLOWED", "H_3FG%_VS_A_ALLOWED", "A_3FG%_VS_H_ALLOWED",
-		"H_TS%_VS_A_DEF", "A_TS%_VS_H_DEF",
+		"H_OFF_VS_A_DEF", "A_OFF_VS_H_DEF", "H_FG%_VS_A_ALLOWED", "A_FG%_VS_H_ALLOWED", "H_2FG%_VS_A_ALLOWED", "A_2FG%_VS_H_ALLOWED", 
+		"H_3FG%_VS_A_ALLOWED", "A_3FG%_VS_H_ALLOWED",
 		"EXPECTED_TOTAL",
-		"H_NET_RATING", "A_NET_RATING", "NET_RATING_DIFF",
-		"REST_DIFF", "PACE_X_NET_RATING", "PACE_X_EFFICIENCY",
+		"H_NET_RATING", "A_NET_RATING", 
+		"REST_DIFF", "PACE_X_EFFICIENCY",
 	};
 
-	
+
 	dataframe basketball_data = load_data(R"(C:\Users\HP\source\repos\Rehoboam\Rehoboam\Data\Basketball\nba\data_file.csv)");
 
 	matrix<double> X;
@@ -187,8 +232,8 @@ int main() {
 
 	std::thread worker = std::thread(gbm_thread, X_train, X_test, Y_train, Y_test, gbm_model_file);
 
-	double feature_ratio = 0.3;
-	RandomForest forest(500, 25, 6, 2, feature_ratio);
+	double feature_ratio = 0.4;
+	RandomForest forest(400, 19, 10, 5, feature_ratio);
 	forest.fit(X_train, Y_train);
 
 	std::vector<double> preds1;
@@ -249,8 +294,8 @@ int main() {
 
 
 	for (const auto& [home, away] : matches) {
-		get_lagged_predictor_values(home_features, away_features, home, predictor, basketball_data);
-		get_lagged_predictor_values(home_features, away_features, away, predictor, basketball_data);
+		get_lagged_predictor_values(home_features, away_features, home, predictor, basketball_data, true);
+		get_lagged_predictor_values(home_features, away_features, away, predictor, basketball_data, false);
 
 		predictor["GAME_PACE"] = (predictor["H_POSS"] + predictor["A_POSS"]) * 0.5;
 		predictor["AVG_TS%"] = (predictor["H_TS%"] + predictor["A_TS%"]) * 0.5;
@@ -262,8 +307,6 @@ int main() {
 		predictor["A_2FG%_VS_H_ALLOWED"] = predictor["A_2FG%"] - predictor["H_2FG%_ALLOWED"];
 		predictor["H_3FG%_VS_A_ALLOWED"] = predictor["H_3FG%"] - predictor["A_3FG%_ALLOWED"];
 		predictor["A_3FG%_VS_H_ALLOWED"] = predictor["A_3FG%"] - predictor["H_3FG%_ALLOWED"];
-		predictor["H_TS%_VS_A_DEF"] = predictor["H_TS%"] - predictor["A_TS%"];
-		predictor["A_TS%_VS_H_DEF"] = predictor["A_TS%"] - predictor["H_TS%"];
 		predictor["H_EXPECTED_SCORE"] = (predictor["H_OFF_RATING"] + predictor["A_DEF_RATING"]) * 0.5;
 		predictor["A_EXPECTED_SCORE"] = (predictor["A_OFF_RATING"] + predictor["H_DEF_RATING"]) * 0.5;
 		predictor["EXPECTED_TOTAL"] = predictor["H_EXPECTED_SCORE"] + predictor["A_EXPECTED_SCORE"];
@@ -273,10 +316,10 @@ int main() {
 		predictor["REST_DIFF"] = predictor["H_REST_DAYS"] - predictor["A_REST_DAYS"];
 		predictor["PACE_X_NET_RATING"] = predictor["GAME_PACE"] * predictor["NET_RATING_DIFF"];
 		predictor["PACE_X_EFFICIENCY"] = predictor["GAME_PACE"] * predictor["AVG_TS%"];
-		
+
+
 		matrix<double> X;
 		X.assign(1, std::vector<double>(predictor.size()));
-		
 		for (int i = 0; i < predictors.size(); ++i) {
 			X[0][i] = predictor[predictors[i]].to_float()[0];
 		}

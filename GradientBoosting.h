@@ -18,7 +18,7 @@ public:
     GradientBoosting(int n_estimators = 100, double learning_rate = 0.1, int max_depth = 5, int min_samples_split = 4, int min_samples_leaf = 1, 
         double feature_sample_ratio = 1.0, std::string loss = "MSE")
         : n_estimators(n_estimators), learning_rate(learning_rate), max_depth(max_depth), min_samples_split(min_samples_split), min_samples_leaf(min_samples_leaf),
-          feature_sample_ratio(feature_sample_ratio), initial_prediction(0.0), loss(loss)
+          feature_sample_ratio(feature_sample_ratio), initial_prediction(0.0), loss(loss), random_state(0)
     {}
 
     void fit(const matrix<double>& X, const std::vector<double>& Y) {
@@ -110,7 +110,7 @@ public:
     }
 
     void load(const std::string& model_file) {
-        std::fstream file(model_file, std::ios::in);
+        std::fstream file(model_file, std::ios::in | std::ios::binary);
         if (!file.is_open()) {
             std::cerr << "Error: Could not load model from file." << std::endl;
             return;
