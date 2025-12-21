@@ -3,7 +3,7 @@
 #include "DecisionTree.h"
 
 struct featureImportance {
-	std::string feature;
+	int index;
 	double weight;
 };
 
@@ -95,7 +95,7 @@ public:
 	}
  
 	std::vector<featureImportance> computeFeatureImportances() {
-		std::unordered_map<std::string, double> importance_map;
+		std::unordered_map<int, double> importance_map;
 
 		for (const auto& tree : trees) {
 			auto imp = tree.get_feature_importance();
@@ -106,9 +106,13 @@ public:
 		std::vector<featureImportance> features;
 		double sum = 0.0;
 
-		for (const auto& featureName : keynames) {
-			double weight = importance_map.count(featureName) ? importance_map.at(featureName) : 0.0;
-			features.push_back({ featureName, weight });
+		for (int i = 0; i < importance_map.size(); ++i) {
+			double weight = 0;
+			if (importance_map.contains(i)) {
+				weight = importance_map.count(i) ? importance_map.at(i) : 0.0;
+
+			}
+			features.push_back({ i, weight });
 			sum += weight;
 		}
 

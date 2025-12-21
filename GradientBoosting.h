@@ -25,11 +25,16 @@ public:
         if (X.empty() || Y.empty()) return;
 
         const double huber_delta = 12.0;
-        const double sample_ratio = 0.8;
+        const double sub_sampling_ratio = 0.8;
 
         initial_prediction = std::accumulate(Y.begin(), Y.end(), 0.0) / (double)Y.size();
 
         std::vector<double> current_predictions(Y.size(), initial_prediction);
+
+        std::random_device rd;
+        if (random_state == -1)
+            random_state = rd();
+        std::mt19937 rng(random_state);
 
         for (int i = 0; i < n_estimators; ++i) {
             std::vector<double> residuals(Y.size());
@@ -46,18 +51,11 @@ public:
                     residuals[j] = error; //use MSE loss gradient
             }
 
-            std::random_device rd;
-
-            if (random_state == -1)
-                random_state = rd();
-
-            std::mt19937 rng(random_state);
-
             std::vector<int> indices(X.size());
             std::iota(std::begin(indices), std::end(indices), 0);
             std::shuffle(std::begin(indices), std::end(indices), rng);
 
-            size_t sample_size = (size_t)(sample_ratio * X.size());
+            size_t sample_size = (size_t)(sub_sampling_ratio * X.size());
             std::vector<int> sample_indices(std::begin(indices), std::begin(indices) + sample_size);
 
             matrix<double> X_sample(sample_size);

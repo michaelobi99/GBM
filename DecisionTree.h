@@ -13,8 +13,6 @@
 #include <chrono>
 
 
-std::vector<std::string> keynames;
-
 template <typename T>
 using matrix = std::vector<std::vector<T>>;
 
@@ -110,7 +108,7 @@ private:
 	int min_samples_leaf;
 	double feature_sample_ratio;
 	std::string loss;
-	std::unordered_map<std::string, double> feature_importance;
+	std::unordered_map<int, double> feature_importance_idx;
 
 	double calculate_MSE(const std::vector<double>& labels) {
 		double n = (double)(labels.size());
@@ -168,6 +166,7 @@ private:
 
 			if (values.empty())
 				continue;
+
 			std::sort(values.begin(), values.end());
 			auto last = std::unique(values.begin(), values.end());
 			values.erase(last, values.end());
@@ -195,7 +194,7 @@ private:
 
 		double gain = parent_mse - best_mse;
 		if (best_feature != -1)
-			feature_importance[keynames[best_feature]] += gain;
+			feature_importance_idx[best_feature] += gain;
 		if (best_mse < parent_mse) {
 			return { best_feature, best_value, best_mse };
 		}
@@ -204,6 +203,7 @@ private:
 
 	TreeNode* build_tree(const matrix<double>& X, const std::vector<double>& Y, const std::vector<int>& indices, unsigned depth) {
 		TreeNode* node = new TreeNode();
+
 		if (indices.empty()) {
 			node->is_leaf = true;
 			node->prediction = 0.0;
@@ -376,7 +376,7 @@ public:
 		min_samples_split = other.min_samples_split;
 		min_samples_leaf = other.min_samples_leaf;
 		feature_sample_ratio = other.feature_sample_ratio;
-		feature_importance = other.feature_importance;
+		feature_importance_idx = other.feature_importance_idx;
 	}
 
 	DecisionTree(DecisionTree&& other) noexcept {
@@ -388,7 +388,7 @@ public:
 		std::swap(min_samples_split, other.min_samples_split);
 		std::swap(min_samples_leaf, other.min_samples_leaf);
 		std::swap(feature_sample_ratio, other.feature_sample_ratio);
-		std::swap(feature_importance, other.feature_importance);
+		std::swap(feature_importance_idx, other.feature_importance_idx);
 	}
 
 	DecisionTree& operator=(const DecisionTree& other) {
@@ -400,7 +400,7 @@ public:
 		min_samples_split = other.min_samples_split;
 		min_samples_leaf = other.min_samples_leaf;
 		feature_sample_ratio = other.feature_sample_ratio;
-		feature_importance = other.feature_importance;
+		feature_importance_idx = other.feature_importance_idx;
 		return *this;
 	}
 
@@ -413,7 +413,7 @@ public:
 		std::swap(min_samples_split, other.min_samples_split);
 		std::swap(min_samples_leaf, other.min_samples_leaf);
 		std::swap(feature_sample_ratio, other.feature_sample_ratio);
-		std::swap(feature_importance, other.feature_importance);
+		std::swap(feature_importance_idx, other.feature_importance_idx);
 		return *this;
 	}
 
@@ -427,8 +427,8 @@ public:
 		root = build_tree(X, Y, indices, 0);
 	}
 
-	std::unordered_map<std::string, double> get_feature_importance() const {
-		return feature_importance;
+	std::unordered_map<int, double> get_feature_importance() const {
+		return feature_importance_idx;
 	}
 
 	std::tuple<double, std::vector<double>> predict(const std::vector<double>& predictors) const {

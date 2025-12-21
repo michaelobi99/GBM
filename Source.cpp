@@ -11,6 +11,22 @@
 #include <cstdio>
 #include <thread>
 
+const std::string WHITESPACE = " \n\r\t\f\v";
+
+inline std::string ltrim(const std::string& s) {
+	size_t start = s.find_first_not_of(WHITESPACE);
+	return (start == std::string::npos) ? "" : s.substr(start);
+}
+
+inline std::string rtrim(const std::string& s) {
+	size_t end = s.find_last_not_of(WHITESPACE);
+	return (end == std::string::npos) ? "" : s.substr(0, end + 1);
+}
+
+inline std::string trim(const std::string& s) {
+	return rtrim(ltrim(s));
+}
+
 
 int calculate_day_difference(const std::string& date_str) {
 	int day, month, year;
@@ -58,20 +74,34 @@ int calculate_day_difference(const std::string& date_str) {
 
 
 std::vector<std::tuple<std::string, std::string>> get_matches() {
-	return std::vector<std::tuple<std::string, std::string>>{
-		std::tuple{ "Chicago Bulls", "Cleveland Cavaliers" },
-			std::tuple{ "Minnesota Timberwolves", "Memphis Grizzlies" },
-			/*std::tuple{"Utah Jazz", "Dallas Mavericks"},
-			std::tuple{ "Denver Nuggets", "Houston Rockets" },
-			std::tuple{ "Los Angeles Clippers", "Memphis Grizzlies" },
-			std::tuple{"Dallas Mavericks", "Brooklyn Nets"},
-			std::tuple{ "Golden State Warriors", "Minnesota Timberwolves" },
-			std::tuple{"Los Angeles Lakers", "New Orleans Pelicans"},
-			std::tuple{"Los Angeles Clippers", "Dallas Mavericks"},
-			std::tuple{ "Utah Jazz", "Sacramento Kings" },
-			std::tuple{ "Los Angeles Lakers", "Dallas Mavericks" },
-			std::tuple{ "Los Angeles Clippers", "Memphis Grizzlies" },*/
+	std::vector<std::string> matches =  {
+		std::string{ "Atlanta Hawks vs Chicago Bulls" },
+		std::string{ "Brooklyn Nets vs Toronto Raptors" },
+		std::string{ "New York Knicks vs Miami Heat" },
+		std::string{ "Minnesota Timberwolves vs Milwaukee Bucks" },
+		std::string{ "Washington Wizards vs San Antonio Spurs"},
+		std::string{ "Sacramento Kings vs Houston Rockets" },
+		/*std::string{ "Memphis Grizzlies", "Washington Wizards" },
+		std::string{ "Golden State Warriors", "Phoenix Suns" },
+		std::string{ "Utah Jazz", "Orlando Magic" },
+		std::string{ "Sacramento Kings", "Portland Trail Blazers" },
+		std::string{ "Los Angeles Clippers", "Los Angeles Lakers" },
+		std::string{ "Atlanta Hawks", "Chicago Bulls" },*/
 	};
+
+	std::vector<std::tuple<std::string, std::string>> result;
+	std::string word = "vs", team_1{ "" }, team_2{ "" };
+	for (const auto& match : matches) {
+		auto pos = std::search(std::cbegin(match), std::cend(match),
+			std::cbegin(word), std::cend(word));
+		if (pos != std::cend(match)) {
+			team_1 = trim(std::string(match.cbegin(), pos));
+			team_2 = trim(std::string(pos + word.size(), match.cend()));
+			result.push_back({ team_1, team_2 });
+		}
+		else continue;
+	}
+	return result;
 }
 
 
@@ -160,8 +190,8 @@ void get_lagged_predictor_values(const std::vector<std::string>& home_features, 
 void gbm_thread(
 	matrix<double> X_train, matrix<double> X_test, std::vector<double> Y_train, std::vector<double> Y_test, std::string gbm_model_file)
 {
-	//GradientBoosting booster(800, 0.01, 8, 8, 7, 1.0, "HUBER");
-	GradientBoosting booster(800, 0.05, 6, 20, 10, 1.0);
+	// GradientBoosting booster(1000, 0.01, 5, 20, 10, 0.7, HUBER);
+	GradientBoosting booster(1000, 0.01, 5, 20, 10, 0.7);
 	booster.fit(X_train, Y_train);
 
 	std::vector<double> preds2;
@@ -189,10 +219,10 @@ int main() {
 		//"PACE_X_NET_RATING"
 		//"H_EFG%", "A_EFG%",
 		//"NET_RATING_DIFF",
-
+		//"H_REST_DAYS", "A_REST_DAYS",
 
 		"H_2FG%", "A_2FG%", "H_3FG%", "A_3FG%",  "H_FT%", "A_FT%",
-		"H_OFF_RATING", "A_OFF_RATING", "H_DEF_RATING", "A_DEF_RATING", "H_REST_DAYS", "A_REST_DAYS",
+		"H_OFF_RATING", "A_OFF_RATING", "H_DEF_RATING", "A_DEF_RATING",
 		"H_FG%_ALLOWED", "A_FG%_ALLOWED", "H_2FG%_ALLOWED", "A_2FG%_ALLOWED", "H_3FG%_ALLOWED", "A_3FG%_ALLOWED", "H_TOV_ALLOWED", "A_TOV_ALLOWED",
 		"H_3FG_RATE", "A_3FG_RATE", "H_FT_RATE", "A_FT_RATE",
 		"H_TOV_RATE", "A_TOV_RATE", "H_OREB_RATE", "A_OREB_RATE", "H_DREB_RATE", "A_DREB_RATE",
@@ -205,7 +235,7 @@ int main() {
 		"REST_DIFF", "PACE_X_EFFICIENCY",
 	};
 
-
+	/*
 	dataframe basketball_data = load_data(R"(C:\Users\HP\source\repos\Rehoboam\Rehoboam\Data\Basketball\nba\data_file.csv)");
 
 	matrix<double> X;
@@ -232,8 +262,9 @@ int main() {
 
 	std::thread worker = std::thread(gbm_thread, X_train, X_test, Y_train, Y_test, gbm_model_file);
 
-	double feature_ratio = 0.4;
-	RandomForest forest(400, 19, 10, 5, feature_ratio);
+	double feature_ratio = 0.25;
+	//RandomForest forest(400, 19, 10, 5, feature_ratio);
+	RandomForest forest(700, 14, 20, 10, feature_ratio);
 	forest.fit(X_train, Y_train);
 
 	std::vector<double> preds1;
@@ -247,16 +278,17 @@ int main() {
 	forest.save(forest_model_file);
 
 	std::cout << "Random Forest Feature Importance:\n";
-	for (const auto& [feature, importance] : forest.computeFeatureImportances()) {
-		std::cout << feature << ": " << importance << "\n\n";
+	for (const auto& [i, importance] : forest.computeFeatureImportances()) {
+		std::cout << predictors[i] << ": " << importance << "\n\n";
 	}
 	
 	worker.join();
-	
-	
+	*/
+
+
 	//........................................................................................................
 	//Load saved models
-	/*
+	
 	std::string forest_model_file = R"(C:\Users\HP\source\repos\Rehoboam\Rehoboam\Data\Basketball\nba\Forest_model.bin)";
 	std::string gbm_model_file = R"(C:\Users\HP\source\repos\Rehoboam\Rehoboam\Data\Basketball\nba\GBM_model.bin)";
 	std::string filename = R"(C:\Users\HP\source\repos\Rehoboam\Rehoboam\Data\Basketball\nba\data_file.csv)";
@@ -341,6 +373,6 @@ int main() {
 		std::cout << std::left << std::setw(15) << "[over 230.5]" << std::left << std::setw(15) << prob_230 << 1.0 / prob_230 << "\n";
 		std::cout << std::left << std::setw(15) << "[over 240.5]" << std::left << std::setw(15) << prob_240 << 1.0 / prob_240 << "\n\n";
 	}
-	*/
+	
 	//.......................................................................................................
 }
