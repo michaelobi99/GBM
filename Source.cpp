@@ -75,18 +75,20 @@ int calculate_day_difference(const std::string& date_str) {
 
 std::vector<std::tuple<std::string, std::string>> get_matches() {
 	std::vector<std::string> matches =  {
+		std::string{ "Charlotte Hornets vs Washington Wizards" },
+		std::string{ "Philadelphia 76ers vs Brooklyn Nets" },
 		std::string{ "Atlanta Hawks vs Chicago Bulls" },
-		std::string{ "Brooklyn Nets vs Toronto Raptors" },
-		std::string{ "New York Knicks vs Miami Heat" },
-		std::string{ "Minnesota Timberwolves vs Milwaukee Bucks" },
-		std::string{ "Washington Wizards vs San Antonio Spurs"},
-		std::string{ "Sacramento Kings vs Houston Rockets" },
-		/*std::string{ "Memphis Grizzlies", "Washington Wizards" },
-		std::string{ "Golden State Warriors", "Phoenix Suns" },
-		std::string{ "Utah Jazz", "Orlando Magic" },
-		std::string{ "Sacramento Kings", "Portland Trail Blazers" },
-		std::string{ "Los Angeles Clippers", "Los Angeles Lakers" },
-		std::string{ "Atlanta Hawks", "Chicago Bulls" },*/
+		std::string{ "Cleveland Cavaliers vs New Orleans Pelicans" },
+		std::string{ "Indiana Pacers vs Milwaukee Bucks"},
+		std::string{ "Miami Heat vs Toronto Raptors" },
+		std::string{ "Dallas Mavericks vs Denver Nuggets" },
+		std::string{ "Minnesota Timberwolves vs New York Knicks" },
+		std::string{ "San Antonio Spurs vs Oklahoma City Thunder" },
+		std::string{ "Phoenix Suns vs Los Angeles Lakers" },
+		std::string{ "Utah Jazz vs Memphis Grizzlies" },
+		std::string{ "Portland Trail Blazers vs Orlando Magic" },
+		std::string{ "Sacramento Kings vs Detroit Pistons" },
+		std::string{ "Los Angeles Clippers vs Houston Rockets" },
 	};
 
 	std::vector<std::tuple<std::string, std::string>> result;
@@ -323,7 +325,8 @@ int main() {
 	dataframe basketball_data = load_data(filename);
 	dataframe predictor;
 	std::vector<std::tuple<std::string, std::string>> matches = get_matches();
-
+	std::ostringstream stream;
+	stream << std::setprecision(4);
 
 	for (const auto& [home, away] : matches) {
 		get_lagged_predictor_values(home_features, away_features, home, predictor, basketball_data, true);
@@ -357,8 +360,34 @@ int main() {
 		}
 
 		std::cout << home << " VS " << away << ": \n";
-		auto [pred1, prob_210, prob_220, prob_230, prob_240] = forest.predict(X[0]);
+		auto [pred1, prob_220, prob_230, prob_240, prob_250] = forest.predict(X[0]);
 		auto pred2 = booster.predict(X[0]);
+
+		stream.str("");
+		stream << prob_220 * 100.0 << "%";
+		std::string over_220_str = stream.str();
+		stream.str("");
+		stream << prob_230 * 100.0 << "%";
+		std::string over_230_str = stream.str();
+		stream.str("");
+		stream << prob_240 * 100.0 << "%";
+		std::string over_240_str = stream.str();
+		stream.str("");
+		stream << prob_250 * 100.0 << "%";
+		std::string over_250_str = stream.str();
+
+		stream.str("");
+		stream << 1.0 / prob_220;
+		std::string over_220_odds = stream.str();
+		stream.str("");
+		stream << 1.0 / prob_230;
+		std::string over_230_odds = stream.str();
+		stream.str("");
+		stream << 1.0 / prob_240;
+		std::string over_240_odds = stream.str();
+		stream.str("");
+		stream << 1.0 / prob_250;
+		std::string over_250_odds = stream.str();
 
 		std::cout << "forest prediction: " << pred1 << "\n";
 		std::cout << "GBM prediction: " << pred2 << "\n";
@@ -368,10 +397,11 @@ int main() {
 		std::cout << lines << "\n";
 
 		// Use descriptive variables and print the odds column correctly
-		std::cout << std::left << std::setw(15) << "[over 210.5]" << std::left << std::setw(15) << prob_210 << 1.0 / prob_210 << "\n";
-		std::cout << std::left << std::setw(15) << "[over 220.5]" << std::left << std::setw(15) << prob_220 << 1.0 / prob_220 << "\n";
-		std::cout << std::left << std::setw(15) << "[over 230.5]" << std::left << std::setw(15) << prob_230 << 1.0 / prob_230 << "\n";
-		std::cout << std::left << std::setw(15) << "[over 240.5]" << std::left << std::setw(15) << prob_240 << 1.0 / prob_240 << "\n\n";
+		stream << std::setprecision(3);
+		std::cout << std::left << std::setw(15) << "[over 220.5]" << std::left << std::setw(15) << over_220_str << over_220_odds << "\n";
+		std::cout << std::left << std::setw(15) << "[over 230.5]" << std::left << std::setw(15) << over_230_str << over_230_odds << "\n";
+		std::cout << std::left << std::setw(15) << "[over 240.5]" << std::left << std::setw(15) << over_240_str << over_240_odds << "\n";
+		std::cout << std::left << std::setw(15) << "[over 250.5]" << std::left << std::setw(15) << over_250_str << over_250_odds << "\n\n";
 	}
 	
 	//.......................................................................................................

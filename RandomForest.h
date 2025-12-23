@@ -77,21 +77,21 @@ public:
 		if (all_samples.empty()) {
 			return std::tuple{ avg, 0.0, 0.0, 0.0, 0.0 };
 		}
-		int over_210_count{ 0 }, over_220_count{ 0 }, over_230_count{ 0 }, over_240_count{ 0 };
+		int over_220_count{ 0 }, over_230_count{ 0 }, over_240_count{ 0 }, over_250_count{ 0 };
 
 		for (auto elem : all_samples) {
-			if (elem >= 210) ++over_210_count;
 			if (elem >= 220) ++over_220_count;
 			if (elem >= 230) ++over_230_count;
 			if (elem >= 240) ++over_240_count;
+			if (elem >= 250) ++over_250_count;
 		}
 		double total_samples = (double)all_samples.size();
-		double prob_over_210 = over_210_count / total_samples;
 		double prob_over_220 = over_220_count / total_samples;
 		double prob_over_230 = over_230_count / total_samples;
 		double prob_over_240 = over_240_count / total_samples;
+		double prob_over_250 = over_250_count / total_samples;
 
-		return std::tuple{ avg, prob_over_210, prob_over_220, prob_over_230, prob_over_240 };
+		return std::tuple{ avg, prob_over_220, prob_over_230, prob_over_240, prob_over_250 };
 	}
  
 	std::vector<featureImportance> computeFeatureImportances() {
