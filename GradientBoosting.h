@@ -78,7 +78,7 @@ public:
             if (root) {
                 trees.push_back(root);
                 for (size_t j = 0; j < X.size(); ++j) {
-                    auto pred = tree.predict(root, X[j]);
+                    auto [pred, _] = tree.predict(root, X[j]);
                     current_predictions[j] += learning_rate * pred;
                 }
             }
@@ -92,7 +92,7 @@ public:
 
         DecisionTree tree;
         for (auto* root : trees) {
-            auto pred = tree.predict(root, X);
+            auto [pred, _] = tree.predict(root, X);
             result += learning_rate * pred;
         }
         return result;

@@ -76,14 +76,14 @@ int calculate_day_difference(const std::string& date_str) {
 
 std::vector<std::tuple<std::string, std::string>> get_matches() {
 	std::vector<std::string> matches =  {
-		std::string{ "Detroit Pistons vs New York Knicks" },
-		std::string{ "Boston Celtics vs Chicago Bulls"},
-		std::string{ "Toronto Raptors vs Atlanta Hawks"},
-		std::string{ "Houston Rockets vs Phoenix Suns" },
-		std::string{ "Oklahoma City Thunder vs Charlotte Hornets" },
-		std::string{ "Philadelphia 76ers vs Denver Nuggets" },
-		std::string{ "Los Angeles Clippers vs Golden State Warriors" },
-		std::string{ "Portland Trail Blazers vs Utah Jazz"},
+		std::string{ "Indiana Pacers vs Cleveland Cavaliers" },
+		std::string{ "Washington Wizards vs Orlando Magic"},
+		std::string{ "Memphis Grizzlies vs San Antonio Spurs"},
+		std::string{ "Minnesota Timberwolves vs Miami Heat" },
+		std::string{ "New Orleans Pelicans vs Los Angeles Lakers" },
+		std::string{ "Sacramento Kings vs Dallas Mavericks" },
+		/*std::string{ "Los Angeles Clippers vs Golden State Warriors" },
+		std::string{ "Portland Trail Blazers vs Utah Jazz"},*/
 	};
 
 	std::vector<std::tuple<std::string, std::string>> result;
@@ -188,7 +188,7 @@ void gbm_thread(
 	matrix<double> X_train, matrix<double> X_test, std::vector<double> Y_train, std::vector<double> Y_test, std::string gbm_model_file)
 {
 	// GradientBoosting booster(1000, 0.01, 5, 20, 10, 0.7, HUBER);
-	GradientBoosting booster(10000, 0.003, 2, 30, 25, 0.5);
+	GradientBoosting booster(3500, 0.001, 2, 30, 25, 0.5);
 	booster.fit(X_train, Y_train);
 
 	std::vector<double> preds2;
@@ -205,7 +205,7 @@ void gbm_thread(
 void xgb_thread(
 	matrix<double> X_train, matrix<double> X_test, std::vector<double> Y_train, std::vector<double> Y_test, std::string gbm_model_file)
 {
-	XGBoostRegressor model(10000, 0.003, 2, 30, 0.5, 10, 2.0);
+	XGBoostRegressor model(3500, 0.01, 2, 30, 0.5, 10, 2.0);
 	model.fit(X_train, Y_train);
 
 	std::vector<double> preds3;
@@ -278,15 +278,14 @@ int main() {
 	std::thread worker2 = std::thread(xgb_thread, X_train, X_test, Y_train, Y_test, xgb_model_file);
 
 	double feature_ratio = 0.3;
-	//RandomForest forest(400, 19, 10, 5, feature_ratio);
 	RandomForest forest(1000, 10, 25, 10, feature_ratio);
 	forest.fit(X_train, Y_train);
 	
 	std::vector<double> preds1;
 	for (auto i{ 0u }; i < X_test.size(); ++i) {
-		auto val = forest.predict(X_test[i]);
+		auto [val, _1, _2, _3, _4] = forest.predict(X_test[i]);
 		preds1.push_back(val);
-		std::cout << "Real value: " << Y_test[i] << " - Forest Prediction : " << val << "\n";
+		std::cout << "Real value: " << Y_test[i] << " - Forest Prediction : " << val <<" ("<<_1<<","<<_2<<","<<_3<<","<<_4<<")\n";
 	}
 	
 	std::cout << "Forest RMSE: " << evaluate_RMSE(Y_test, preds1) << "\n";
@@ -378,55 +377,52 @@ int main() {
 		}
 
 		std::cout << home << " VS " << away << ": \n";
-		//auto [pred1, prob_220, prob_230, prob_240, prob_250] = forest.predict(X[0]);
-		auto pred1 = forest.predict(X[0]);
+		auto [pred1, prob_220, prob_230, prob_240, prob_250] = forest.predict(X[0]);
 		auto pred2 = booster.predict(X[0]);
 		auto pred3 = xgb.predict(X[0]);
 
-		// stream.str("");
-		// stream << prob_220 * 100.0 << "%";
-		// std::string over_220_str = stream.str();
-		// stream.str("");
-		// stream << prob_230 * 100.0 << "%";
-		// std::string over_230_str = stream.str();
-		// stream.str("");
-		// stream << prob_240 * 100.0 << "%";
-		// std::string over_240_str = stream.str();
-		// stream.str("");
-		// stream << prob_250 * 100.0 << "%";
-		// std::string over_250_str = stream.str();
-		// 
-		// stream.str("");
-		// stream << 1.0 / prob_220;
-		// std::string over_220_odds = stream.str();
-		// stream.str("");
-		// stream << 1.0 / prob_230;
-		// std::string over_230_odds = stream.str();
-		// stream.str("");
-		// stream << 1.0 / prob_240;
-		// std::string over_240_odds = stream.str();
-		// stream.str("");
-		// stream << 1.0 / prob_250;
-		// std::string over_250_odds = stream.str();
+		stream.str("");
+		stream << prob_220 * 100.0 << "%";
+		std::string over_220_str = stream.str();
+		stream.str("");
+		stream << prob_230 * 100.0 << "%";
+		std::string over_230_str = stream.str();
+		stream.str("");
+		stream << prob_240 * 100.0 << "%";
+		std::string over_240_str = stream.str();
+		stream.str("");
+		stream << prob_250 * 100.0 << "%";
+		std::string over_250_str = stream.str();
+		
+		stream.str("");
+		stream << 1.0 / prob_220;
+		std::string over_220_odds = stream.str();
+		stream.str("");
+		stream << 1.0 / prob_230;
+		std::string over_230_odds = stream.str();
+		stream.str("");
+		stream << 1.0 / prob_240;
+		std::string over_240_odds = stream.str();
+		stream.str("");
+		stream << 1.0 / prob_250;
+		std::string over_250_odds = stream.str();
 
 		std::cout << "Forest prediction: " << pred1 << "\n";
 		std::cout << "GBM prediction: " << pred2 << "\n";
-		std::cout << "XGB prediction: " << pred3 << "\n\n";
+		std::cout << "XGB prediction: " << pred3 << "\n";
 
-		//	std::string lines(45, '-');
-		//	std::cout << std::left << std::setw(15) << "Score Range" << std::left << std::setw(15) << "Probability" << "Odds\n";
-		//	std::cout << lines << "\n";
+		std::string lines(45, '-');
+		std::cout << std::left << std::setw(15) << "Score Range" << std::left << std::setw(15) << "Probability" << "Odds\n";
+		std::cout << lines << "\n";
 
-		//	// Use descriptive variables and print the odds column correctly
-		//	stream << std::setprecision(3);
-		//	std::cout << std::left << std::setw(15) << "[over 220.5]" << std::left << std::setw(15) << over_220_str << over_220_odds << "\n";
-		//	std::cout << std::left << std::setw(15) << "[over 230.5]" << std::left << std::setw(15) << over_230_str << over_230_odds << "\n";
-		//	std::cout << std::left << std::setw(15) << "[over 240.5]" << std::left << std::setw(15) << over_240_str << over_240_odds << "\n";
-		//	std::cout << std::left << std::setw(15) << "[over 250.5]" << std::left << std::setw(15) << over_250_str << over_250_odds << "\n\n";
-		//
+		// Use descriptive variables and print the odds column correctly
+		stream << std::setprecision(3);
+		std::cout << std::left << std::setw(15) << "[over 220.5]" << std::left << std::setw(15) << over_220_str << over_220_odds << "\n";
+		std::cout << std::left << std::setw(15) << "[over 230.5]" << std::left << std::setw(15) << over_230_str << over_230_odds << "\n";
+		std::cout << std::left << std::setw(15) << "[over 240.5]" << std::left << std::setw(15) << over_240_str << over_240_odds << "\n";
+		std::cout << std::left << std::setw(15) << "[over 250.5]" << std::left << std::setw(15) << over_250_str << over_250_odds << "\n\n";
 	}
 	//.......................................................................................................
-
 }
 
 

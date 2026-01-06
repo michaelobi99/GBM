@@ -87,6 +87,7 @@ struct TreeNode {
 	double    split_value;
 	double    prediction;
 	std::unordered_map<int, double> feature_importance_idx;
+	std::vector<double> samples;
 	TreeNode* left;
 	TreeNode* right;
 
@@ -230,14 +231,16 @@ private:
 
 		if (depth >= max_depth || indices.size() <= min_samples_split) {
 			node->is_leaf = true;
-			std::vector<double> leave_samples(indices.size());
-			for (auto i{ 0 }; i < indices.size(); ++i) leave_samples[i] = Y[indices[i]];
+			node->samples.clear();
+			node->samples.resize(indices.size());
+			
+			for (auto i{ 0 }; i < indices.size(); ++i) node->samples[i] = Y[indices[i]];
 
 			if (loss == "MSE") {
-				node->prediction = mean(leave_samples);
+				node->prediction = mean(node->samples);
 			}
 			else if (loss == "HUBER") {
-				node->prediction = median(leave_samples);
+				node->prediction = median(node->samples);
 			}
 				
 			else {
@@ -251,14 +254,16 @@ private:
 
 		if (feature_idx == -1) {
 			node->is_leaf = true;
-			std::vector<double> leave_samples(indices.size());
-			for (auto i{ 0 }; i < indices.size(); ++i) leave_samples[i] = Y[indices[i]];
+			node->samples.clear();
+			node->samples.resize(indices.size());
+
+			for (auto i{ 0 }; i < indices.size(); ++i) node->samples[i] = Y[indices[i]];
 
 			if (loss == "MSE") {
-				node->prediction = mean(leave_samples);
+				node->prediction = mean(node->samples);
 			}
 			else if (loss == "HUBER") {
-				node->prediction = median(leave_samples);
+				node->prediction = median(node->samples);
 			}
 
 			else {
@@ -276,14 +281,16 @@ private:
 
 		if (left_indices.size() < min_samples_leaf || right_indices.size() < min_samples_leaf) {
 			node->is_leaf = true;
-			std::vector<double> leave_samples(indices.size());
-			for (auto i{ 0 }; i < indices.size(); ++i) leave_samples[i] = Y[indices[i]];
+			node->samples.clear();
+			node->samples.resize(indices.size());
+
+			for (auto i{ 0 }; i < indices.size(); ++i) node->samples[i] = Y[indices[i]];
 
 			if (loss == "MSE") {
-				node->prediction = mean(leave_samples);
+				node->prediction = mean(node->samples);
 			}
 			else if (loss == "HUBER") {
-				node->prediction = median(leave_samples);
+				node->prediction = median(node->samples);
 			}
 
 			else {
@@ -333,6 +340,10 @@ private:
 		model_file.write(reinterpret_cast<const char*>(&node->feature_index), sizeof(node->feature_index));
 		model_file.write(reinterpret_cast<const char*>(&node->split_value), sizeof(node->split_value));
 		model_file.write(reinterpret_cast<const char*>(&node->prediction), sizeof(node->prediction));
+		size_t size = node->samples.size();
+		model_file.write(reinterpret_cast<const char*>(&size), sizeof(size_t));
+		if (size > 0)
+			model_file.write(reinterpret_cast<const char*>(node->samples.data()), sizeof(double) * size);
 		//serialize children recursively
 		if (!node->is_leaf) {
 			serialize(model_file, node->left);
@@ -351,6 +362,12 @@ private:
 		model_file.read(reinterpret_cast<char*>(&node->feature_index), sizeof(node->feature_index));
 		model_file.read(reinterpret_cast<char*>(&node->split_value), sizeof(node->split_value));
 		model_file.read(reinterpret_cast<char*>(&node->prediction), sizeof(node->prediction));
+		size_t size = 0;
+		model_file.read(reinterpret_cast<char*>(&size), sizeof(size_t));
+		if (size > 0) {
+			node->samples.resize(size);
+			model_file.read(reinterpret_cast<char*>(node->samples.data()), sizeof(double) * size);
+		}
 		//deserialize children recursively
 		if (!node->is_leaf) {
 			node->left = deserialize(model_file);
@@ -374,12 +391,12 @@ public:
 
 	}
 
-	double predict(TreeNode* root, const std::vector<double>& predictors) const {
+	std::pair<double, std::vector<double>> predict(TreeNode* root, const std::vector<double>& predictors) const {
 		const TreeNode* node = root;
 		while (node && !node->is_leaf) {
 			node = predictors[node->feature_index] <= node->split_value ? node->left : node->right;
 		}
-		return node ? node->prediction : 0.0;
+		return node ? std::pair{node->prediction, node->samples} : std::pair{0.0, std::vector<double>()};
 	}
 
 	void save(TreeNode* root, std::fstream& model_file_obj) {

@@ -57,9 +57,9 @@ public:
 		}
 	}
 
-	double predict(const std::vector<double>& predictors) const {
-		if (trees.size() == 0) return 0.0;
-			//return std::tuple{ 0.0, 0.0, 0.0, 0.0, 0.0 };
+	std::tuple<double, double, double, double, double> predict(const std::vector<double>& predictors) const {
+		if (trees.size() == 0)
+			return std::tuple{ 0.0, 0.0, 0.0, 0.0, 0.0 };
 
 		std::vector<double> predictions(trees.size());
 		std::vector<double> all_samples;
@@ -67,17 +67,16 @@ public:
 
 		DecisionTree tree;
 		for (auto* root : trees) {
-			auto pred = tree.predict(root, predictors);
+			auto [pred, leaf_samples] = tree.predict(root, predictors);
 			predictions[i++] = pred;
-			/*for (const auto elem : sample_indices) {
+			for (const auto elem : leaf_samples) {
 				all_samples.push_back(elem);
-			}*/
+			}
 		}
 		double avg = std::accumulate(std::begin(predictions), std::end(predictions), 0.0);
 		avg /= (double)trees.size();
-		return avg;
 
-		/*if (all_samples.empty()) {
+		if (all_samples.empty()) {
 			return std::tuple{ avg, 0.0, 0.0, 0.0, 0.0 };
 		}
 		int over_220_count{ 0 }, over_230_count{ 0 }, over_240_count{ 0 }, over_250_count{ 0 };
@@ -94,7 +93,7 @@ public:
 		double prob_over_240 = over_240_count / total_samples;
 		double prob_over_250 = over_250_count / total_samples;
 
-		return std::tuple{ avg, prob_over_220, prob_over_230, prob_over_240, prob_over_250 };*/
+		return std::tuple{ avg, prob_over_220, prob_over_230, prob_over_240, prob_over_250 };
 	}
  
 	std::vector<featureImportance> computeFeatureImportances() {
