@@ -50,7 +50,7 @@ double evaluate_Huber_RMSE(const std::vector<double>& Y_test, const std::vector<
 }
 
 std::tuple<matrix<double>, matrix<double>, std::vector<double>, std::vector<double>>
-train_test_split(const matrix<double>& X, const std::vector<double>& Y, double test_size = 0.15, bool time_based = true, int random_state = -1) {
+train_test_split(const matrix<double>& X, const std::vector<double>& Y, double test_size = 0.10, bool time_based = true, int random_state = -1) {
 	std::vector<int> indices(Y.size(), 0);
 	std::iota(std::begin(indices), std::end(indices), 0);
 	std::random_device rd;
@@ -86,7 +86,7 @@ struct TreeNode {
 	int	      feature_index;
 	double    split_value;
 	double    prediction;
-	std::vector<double> samples;
+	std::unordered_map<int, double> feature_importance_idx;
 	TreeNode* left;
 	TreeNode* right;
 
@@ -102,13 +102,13 @@ struct TreeNode {
 
 struct DecisionTree {
 private:
-	TreeNode* root;
 	int max_depth;
 	int min_samples_split;
 	int min_samples_leaf;
 	double feature_sample_ratio;
-	std::string loss;
 	std::unordered_map<int, double> feature_importance_idx;
+	std::string loss;
+	
 
 	double calculate_MSE(const std::vector<double>& labels) {
 		double n = (double)(labels.size());
@@ -123,27 +123,36 @@ private:
 		return mse / n;
 	}
 
-	std::tuple<std::vector<int>, std::vector<int>> split_data(const matrix<double>& X, const std::vector<int>& indices, int feature_idx, double split_value) {
-		std::vector<int> left_indices, right_indices;
+	void split_data(std::vector<int>& left_indices, std::vector<int>& right_indices, 
+		const matrix<double>& X, const std::vector<int>& indices, int feature_idx, double split_value) {
 		for (auto idx : indices) {
 			if (X[idx][feature_idx] <= split_value) {
 				left_indices.push_back(idx);
 			}
 			else right_indices.push_back(idx);
 		}
-		return std::tuple{ left_indices, right_indices };
 	}
 
 	std::tuple<int, double, double> find_best_split(const matrix<double>& X, const std::vector<double>& Y, const std::vector<int>& indices) {
-		double best_mse = std::numeric_limits<double>::max();
+		double best_mse = -1.0;
 		int best_feature = -1;
 		double best_value = 0;
-		std::random_device rd;
-		std::mt19937 rng(rd());
 
-		double parent_mse = calculate_MSE(Y);
+		// Calculate parent stats once
+		double sum_total = 0;
+		double sum_sq_total = 0;
+		for (int idx : indices) {
+			sum_total += Y[idx];
+			sum_sq_total += Y[idx] * Y[idx];
+		}
+		int N = indices.size();
+
+		double parent_mse = (sum_sq_total - (sum_total * sum_total / (double)N));
+		parent_mse /= (double)N;
 
 		size_t number_of_features = X[0].size();
+		std::random_device rd;
+		std::mt19937 rng(rd());
 
 		if (feature_sample_ratio > 1.0)
 			feature_sample_ratio = 1.0;
@@ -159,47 +168,56 @@ private:
 		std::vector<int> chosen_features(std::begin(feature_indices), std::begin(feature_indices) + nFeatures);
 
 		for (int feature_idx : chosen_features) {
-			std::vector<double> values;
-			for (auto idx : indices) {
-				values.push_back(X[idx][feature_idx]);
+			// 1. Sort indices based on feature values
+			std::vector<std::pair<double, int>> sorted_samples;
+			sorted_samples.reserve(N);
+			for (int idx : indices) {
+				sorted_samples.push_back({ X[idx][feature_idx], idx });
 			}
+			std::sort(sorted_samples.begin(), sorted_samples.end());
 
-			if (values.empty())
-				continue;
+			// 2. Sliding Window Scan
+			double sum_left = 0, sum_sq_left = 0;
+			int count_left = 0;
 
-			std::sort(values.begin(), values.end());
-			auto last = std::unique(values.begin(), values.end());
-			values.erase(last, values.end());
+			// Stop at N-1 because we need at least one element on the right
+			for (int i = 0; i < N - 1; ++i) {
+				double val = Y[sorted_samples[i].second];
+				sum_left += val;
+				sum_sq_left += val * val;
+				count_left++;
 
-			for (double value : values) {
-				auto [left_indices, right_indices] = split_data(X, indices, feature_idx, value);
-				if (left_indices.size() < min_samples_leaf || right_indices.size() < min_samples_leaf) continue;
+				// Skip splits that create tiny leaves
+				if (count_left < min_samples_leaf) continue;
+				int count_right = N - count_left;
+				if (count_right < min_samples_leaf) continue;
 
-				std::vector<double> left_label, right_label;
-				for (auto idx : left_indices) left_label.push_back(Y[idx]);
-				for (auto idx : right_indices) right_label.push_back(Y[idx]);
+				// Only check split if the next value is different (handles duplicate feature values)
+				if (sorted_samples[i].first == sorted_samples[i + 1].first) continue;
 
-				double left_mse = calculate_MSE(left_label);
-				double right_mse = calculate_MSE(right_label);
+				// Calculate MSE for Left and Right using the variance formula:
+				// MSE = (SumSq - (Sum^2 / N)) / N
+				double sum_right = sum_total - sum_left;
+				double sum_sq_right = sum_sq_total - sum_sq_left;
 
-				double weighted_mse = (left_label.size() * left_mse + right_label.size() * right_mse) / indices.size();
+				double mse_left = (sum_sq_left - (sum_left * sum_left / count_left));
+				double mse_right = (sum_sq_right - (sum_right * sum_right / count_right));
 
-				if (weighted_mse < best_mse) {
-					best_mse = weighted_mse;
+				double total_weighted_mse = (mse_left + mse_right) / N;
+
+				if (best_feature == -1 || total_weighted_mse < best_mse) {
+					best_mse = total_weighted_mse;
 					best_feature = feature_idx;
-					best_value = value;
+					best_value = (sorted_samples[i].first + sorted_samples[i + 1].first) / 2.0;
 				}
 			}
 		}
-
 		double gain = parent_mse - best_mse;
 		if (best_feature != -1)
 			feature_importance_idx[best_feature] += gain;
-		if (best_mse < parent_mse) {
-			return { best_feature, best_value, best_mse };
-		}
-		return { -1, 0.0, 0.0 };
+		return { best_feature, best_value, best_mse };
 	}
+
 
 	TreeNode* build_tree(const matrix<double>& X, const std::vector<double>& Y, const std::vector<int>& indices, unsigned depth) {
 		TreeNode* node = new TreeNode();
@@ -212,13 +230,16 @@ private:
 
 		if (depth >= max_depth || indices.size() <= min_samples_split) {
 			node->is_leaf = true;
-			for (auto idx : indices) {
-				node->samples.push_back(Y[idx]);
+			std::vector<double> leave_samples(indices.size());
+			for (auto i{ 0 }; i < indices.size(); ++i) leave_samples[i] = Y[indices[i]];
+
+			if (loss == "MSE") {
+				node->prediction = mean(leave_samples);
 			}
-			if (loss == "MSE")
-				node->prediction = mean(node->samples);
-			else if (loss == "HUBER")
-				node->prediction = median(node->samples);
+			else if (loss == "HUBER") {
+				node->prediction = median(leave_samples);
+			}
+				
 			else {
 				std::cout << "ERROR: Unknown loss\n";
 				exit(1);
@@ -227,15 +248,19 @@ private:
 		}
 
 		auto [feature_idx, split_value, mse] = find_best_split(X, Y, indices);
+
 		if (feature_idx == -1) {
 			node->is_leaf = true;
-			for (auto idx : indices) {
-				node->samples.push_back(Y[idx]);
+			std::vector<double> leave_samples(indices.size());
+			for (auto i{ 0 }; i < indices.size(); ++i) leave_samples[i] = Y[indices[i]];
+
+			if (loss == "MSE") {
+				node->prediction = mean(leave_samples);
 			}
-			if (loss == "MSE")
-				node->prediction = mean(node->samples);
-			else if (loss == "HUBER")
-				node->prediction = median(node->samples);
+			else if (loss == "HUBER") {
+				node->prediction = median(leave_samples);
+			}
+
 			else {
 				std::cout << "ERROR: Unknown loss\n";
 				exit(1);
@@ -243,16 +268,24 @@ private:
 			return node;
 		}
 
-		auto [left_indices, right_indices] = split_data(X, indices, feature_idx, split_value);
+
+		std::vector<int> left_indices, right_indices;
+		left_indices.reserve(indices.size()); right_indices.reserve(indices.size());
+		split_data(left_indices, right_indices, X, indices, feature_idx, split_value);
+		left_indices.shrink_to_fit(), right_indices.shrink_to_fit();
+
 		if (left_indices.size() < min_samples_leaf || right_indices.size() < min_samples_leaf) {
 			node->is_leaf = true;
-			for (auto idx : indices) {
-				node->samples.push_back(Y[idx]);
+			std::vector<double> leave_samples(indices.size());
+			for (auto i{ 0 }; i < indices.size(); ++i) leave_samples[i] = Y[indices[i]];
+
+			if (loss == "MSE") {
+				node->prediction = mean(leave_samples);
 			}
-			if (loss == "MSE")
-				node->prediction = mean(node->samples);
-			else if (loss == "HUBER")
-				node->prediction = median(node->samples);
+			else if (loss == "HUBER") {
+				node->prediction = median(leave_samples);
+			}
+
 			else {
 				std::cout << "ERROR: Unknown loss\n";
 				exit(1);
@@ -286,29 +319,6 @@ private:
 		return 0.5 * (array[n / 2 - 1] + array[n / 2]);
 	}
 
-
-	void copyTree(TreeNode*& toNode, TreeNode* fromNode) {
-		if (!fromNode) toNode = nullptr;
-		else {
-			toNode = new TreeNode;
-			toNode->is_leaf = fromNode->is_leaf;
-			toNode->feature_index = fromNode->feature_index;
-			toNode->split_value = fromNode->split_value;
-			toNode->prediction = fromNode->prediction;
-			copyTree(toNode->left, fromNode->left);
-			copyTree(toNode->right, fromNode->right);
-		}
-	}
-
-	void destroy(TreeNode*& node) {
-		if (node != nullptr) {
-			destroy(node->left);
-			destroy(node->right);
-			delete node;
-			node = nullptr;
-		}
-	}
-
 	void serialize(std::fstream& model_file, TreeNode* node) {
 		// Handle nullptr nodes
 		if (node == nullptr) {
@@ -323,11 +333,6 @@ private:
 		model_file.write(reinterpret_cast<const char*>(&node->feature_index), sizeof(node->feature_index));
 		model_file.write(reinterpret_cast<const char*>(&node->split_value), sizeof(node->split_value));
 		model_file.write(reinterpret_cast<const char*>(&node->prediction), sizeof(node->prediction));
-		size_t s = node->samples.size();
-		model_file.write(reinterpret_cast<const char*>(&s), sizeof(s));
-		if (s > 0) {
-			model_file.write(reinterpret_cast<const char*>(node->samples.data()), s * sizeof(double));
-		}
 		//serialize children recursively
 		if (!node->is_leaf) {
 			serialize(model_file, node->left);
@@ -346,12 +351,6 @@ private:
 		model_file.read(reinterpret_cast<char*>(&node->feature_index), sizeof(node->feature_index));
 		model_file.read(reinterpret_cast<char*>(&node->split_value), sizeof(node->split_value));
 		model_file.read(reinterpret_cast<char*>(&node->prediction), sizeof(node->prediction));
-		size_t s;
-		model_file.read(reinterpret_cast<char*>(&s), sizeof(s));
-		if (s > 0) {
-			node->samples.resize(s);
-			model_file.read(reinterpret_cast<char*>(node->samples.data()), s * sizeof(double));
-		}
 		//deserialize children recursively
 		if (!node->is_leaf) {
 			node->left = deserialize(model_file);
@@ -362,108 +361,32 @@ private:
 
 public:
 	DecisionTree(int max_depth = 5, int min_samples_split = 4, int min_samples_leaf = 1, double feature_sample_ratio = 1.0, std::string loss = "MSE") :
-		root{ nullptr }, max_depth{ max_depth }, min_samples_split{ min_samples_split }, min_samples_leaf{ min_samples_leaf },
+		max_depth{ max_depth }, min_samples_split{ min_samples_split }, min_samples_leaf{ min_samples_leaf },
 		feature_sample_ratio{ feature_sample_ratio }, loss{ loss }
-	{
-	}
+	{}
 
-	DecisionTree(const DecisionTree& other) {
-		if (!other.root)
-			root = nullptr;
-		else
-			copyTree(root, other.root);
-		max_depth = other.max_depth;
-		min_samples_split = other.min_samples_split;
-		min_samples_leaf = other.min_samples_leaf;
-		feature_sample_ratio = other.feature_sample_ratio;
-		feature_importance_idx = other.feature_importance_idx;
-	}
-
-	DecisionTree(DecisionTree&& other) noexcept {
-		if (other.root)
-			root = std::exchange(other.root, nullptr);
-		else
-			root = nullptr;
-		std::swap(max_depth, other.max_depth);
-		std::swap(min_samples_split, other.min_samples_split);
-		std::swap(min_samples_leaf, other.min_samples_leaf);
-		std::swap(feature_sample_ratio, other.feature_sample_ratio);
-		std::swap(feature_importance_idx, other.feature_importance_idx);
-	}
-
-	DecisionTree& operator=(const DecisionTree& other) {
-		if (!other.root)
-			root = nullptr;
-		else
-			copyTree(root, other.root);
-		max_depth = other.max_depth;
-		min_samples_split = other.min_samples_split;
-		min_samples_leaf = other.min_samples_leaf;
-		feature_sample_ratio = other.feature_sample_ratio;
-		feature_importance_idx = other.feature_importance_idx;
-		return *this;
-	}
-
-	DecisionTree& operator=(DecisionTree&& other) noexcept {
-		if (other.root)
-			root = std::exchange(other.root, nullptr);
-		else
-			root = nullptr;
-		std::swap(max_depth, other.max_depth);
-		std::swap(min_samples_split, other.min_samples_split);
-		std::swap(min_samples_leaf, other.min_samples_leaf);
-		std::swap(feature_sample_ratio, other.feature_sample_ratio);
-		std::swap(feature_importance_idx, other.feature_importance_idx);
-		return *this;
-	}
-
-	~DecisionTree() {
-		destroy(root);
-	}
-
-	void fit(const matrix<double>& X, const std::vector<double>& Y) {
+	TreeNode* fit(const matrix<double>& X, const std::vector<double>& Y) {
 		std::vector<int> indices(Y.size());
 		std::iota(std::begin(indices), std::end(indices), 0);
-		root = build_tree(X, Y, indices, 0);
+		TreeNode* root = build_tree(X, Y, indices, 0);
+		root->feature_importance_idx = feature_importance_idx;
+		return root;
+
 	}
 
-	std::unordered_map<int, double> get_feature_importance() const {
-		return feature_importance_idx;
-	}
-
-	std::tuple<double, std::vector<double>> predict(const std::vector<double>& predictors) const {
+	double predict(TreeNode* root, const std::vector<double>& predictors) const {
 		const TreeNode* node = root;
 		while (node && !node->is_leaf) {
 			node = predictors[node->feature_index] <= node->split_value ? node->left : node->right;
 		}
-		return node ? std::tuple{ node->prediction, node->samples } : std::tuple{ 0.0, std::vector<double>() };
+		return node ? node->prediction : 0.0;
 	}
 
-	void save(std::fstream& model_file_obj) {
-		model_file_obj.write(reinterpret_cast<const char*>(&max_depth), sizeof(max_depth));
-		model_file_obj.write(reinterpret_cast<const char*>(&min_samples_split), sizeof(min_samples_split));
-		model_file_obj.write(reinterpret_cast<const char*>(&min_samples_leaf), sizeof(min_samples_leaf));
-		model_file_obj.write(reinterpret_cast<const char*>(&feature_sample_ratio), sizeof(feature_sample_ratio));
+	void save(TreeNode* root, std::fstream& model_file_obj) {
 		serialize(model_file_obj, root);
 	}
 
-	void load(std::fstream& model_file_obj) {
-		model_file_obj.read(reinterpret_cast<char*>(&max_depth), sizeof(max_depth));
-		model_file_obj.read(reinterpret_cast<char*>(&min_samples_split), sizeof(min_samples_split));
-		model_file_obj.read(reinterpret_cast<char*>(&min_samples_leaf), sizeof(min_samples_leaf));
-		model_file_obj.read(reinterpret_cast<char*>(&feature_sample_ratio), sizeof(feature_sample_ratio));
+	void load(TreeNode*& root, std::fstream& model_file_obj) {
 		root = deserialize(model_file_obj);
-	}
-
-	void save(const std::string& model_file) {
-		std::fstream file(model_file, std::ios::out | std::ios::binary);
-		save(file);
-		file.close();
-	}
-
-	void load(const std::string& model_file) {
-		std::fstream file(model_file, std::ios::in | std::ios::binary);
-		load(file);
-		file.close();
 	}
 };

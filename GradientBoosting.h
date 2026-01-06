@@ -3,7 +3,6 @@
 
 class GradientBoosting {
 private:
-    std::vector<DecisionTree> trees;
     double learning_rate;
     int n_estimators;
     int max_depth;
@@ -13,13 +12,20 @@ private:
     double feature_sample_ratio;
     double initial_prediction;
     std::string loss;
+    std::vector<TreeNode*> trees;
+
 
 public:
     GradientBoosting(int n_estimators = 100, double learning_rate = 0.1, int max_depth = 5, int min_samples_split = 4, int min_samples_leaf = 1, 
-        double feature_sample_ratio = 1.0, std::string loss = "MSE")
+        double feature_sample_ratio = 1.0, std::string loss = "MSE", int random_state = -1)
         : n_estimators(n_estimators), learning_rate(learning_rate), max_depth(max_depth), min_samples_split(min_samples_split), min_samples_leaf(min_samples_leaf),
-          feature_sample_ratio(feature_sample_ratio), initial_prediction(0.0), loss(loss), random_state(0)
+          feature_sample_ratio(feature_sample_ratio), initial_prediction(0.0), 
+          loss(loss), random_state(random_state)
     {}
+
+    ~GradientBoosting() {
+        for (auto* tree : trees) delete tree;
+    }
 
     void fit(const matrix<double>& X, const std::vector<double>& Y) {
         if (X.empty() || Y.empty()) return;
@@ -67,14 +73,16 @@ public:
             }
 
             DecisionTree tree(max_depth, min_samples_split, min_samples_leaf, feature_sample_ratio, loss);
-            tree.fit(X_sample, residual_sample);
-            trees.push_back(std::move(tree));
+            TreeNode* root = tree.fit(X_sample, residual_sample);
 
-            // Update the predictions of the ensemble
-            for (size_t j = 0; j < X.size(); ++j) {
-                auto [pred, _] = trees.back().predict(X[j]);
-                current_predictions[j] += learning_rate * pred;
+            if (root) {
+                trees.push_back(root);
+                for (size_t j = 0; j < X.size(); ++j) {
+                    auto pred = tree.predict(root, X[j]);
+                    current_predictions[j] += learning_rate * pred;
+                }
             }
+            
         }
     }
 
@@ -82,8 +90,9 @@ public:
         if (X.empty()) return 0;
         double result = initial_prediction;
 
-        for (const auto& tree : trees) {
-            auto [pred, _] = tree.predict(X);
+        DecisionTree tree;
+        for (auto* root : trees) {
+            auto pred = tree.predict(root, X);
             result += learning_rate * pred;
         }
         return result;
@@ -95,14 +104,13 @@ public:
             std::cerr << "Error: Could not save model to file." << std::endl;
             return;
         }
-
         file.write(reinterpret_cast<const char*>(&n_estimators), sizeof(n_estimators));
         file.write(reinterpret_cast<const char*>(&learning_rate), sizeof(learning_rate));
-        file.write(reinterpret_cast<const char*>(&random_state), sizeof(random_state));
         file.write(reinterpret_cast<const char*>(&initial_prediction), sizeof(initial_prediction));
 
-        for (auto& tree : trees) {
-            tree.save(file);
+        DecisionTree tree;
+        for (auto* root : trees) {
+            tree.save(root, file);
         }
         file.close();
     }
@@ -114,16 +122,19 @@ public:
             return;
         }
 
+        for (auto* tree : trees) if (tree) delete tree;
+        trees.clear();
+
         file.read(reinterpret_cast<char*>(&n_estimators), sizeof(n_estimators));
         file.read(reinterpret_cast<char*>(&learning_rate), sizeof(learning_rate));
-        file.read(reinterpret_cast<char*>(&random_state), sizeof(random_state));
         file.read(reinterpret_cast<char*>(&initial_prediction), sizeof(initial_prediction));
 
-        trees.clear();
+        DecisionTree tree;
+        trees.reserve(n_estimators);
         for (int i = 0; i < n_estimators; ++i) {
-            DecisionTree tree;
-            tree.load(file);
-            trees.push_back(std::move(tree));
+            TreeNode* root = nullptr;
+            tree.load(root, file);
+            if (root) trees.push_back(root);
         }
         file.close();
     }

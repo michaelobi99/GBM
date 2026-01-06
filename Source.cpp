@@ -3,6 +3,7 @@
 
 #include "RandomForest.h"
 #include "GradientBoosting.h"
+#include "XGBoost.h"
 #include "DataFrame.h"
 #include <tuple>
 #include <set>
@@ -75,20 +76,14 @@ int calculate_day_difference(const std::string& date_str) {
 
 std::vector<std::tuple<std::string, std::string>> get_matches() {
 	std::vector<std::string> matches =  {
-		std::string{ "Charlotte Hornets vs Washington Wizards" },
-		std::string{ "Philadelphia 76ers vs Brooklyn Nets" },
-		std::string{ "Atlanta Hawks vs Chicago Bulls" },
-		std::string{ "Cleveland Cavaliers vs New Orleans Pelicans" },
-		std::string{ "Indiana Pacers vs Milwaukee Bucks"},
-		std::string{ "Miami Heat vs Toronto Raptors" },
-		std::string{ "Dallas Mavericks vs Denver Nuggets" },
-		std::string{ "Minnesota Timberwolves vs New York Knicks" },
-		std::string{ "San Antonio Spurs vs Oklahoma City Thunder" },
-		std::string{ "Phoenix Suns vs Los Angeles Lakers" },
-		std::string{ "Utah Jazz vs Memphis Grizzlies" },
-		std::string{ "Portland Trail Blazers vs Orlando Magic" },
-		std::string{ "Sacramento Kings vs Detroit Pistons" },
-		std::string{ "Los Angeles Clippers vs Houston Rockets" },
+		std::string{ "Detroit Pistons vs New York Knicks" },
+		std::string{ "Boston Celtics vs Chicago Bulls"},
+		std::string{ "Toronto Raptors vs Atlanta Hawks"},
+		std::string{ "Houston Rockets vs Phoenix Suns" },
+		std::string{ "Oklahoma City Thunder vs Charlotte Hornets" },
+		std::string{ "Philadelphia 76ers vs Denver Nuggets" },
+		std::string{ "Los Angeles Clippers vs Golden State Warriors" },
+		std::string{ "Portland Trail Blazers vs Utah Jazz"},
 	};
 
 	std::vector<std::tuple<std::string, std::string>> result;
@@ -193,7 +188,7 @@ void gbm_thread(
 	matrix<double> X_train, matrix<double> X_test, std::vector<double> Y_train, std::vector<double> Y_test, std::string gbm_model_file)
 {
 	// GradientBoosting booster(1000, 0.01, 5, 20, 10, 0.7, HUBER);
-	GradientBoosting booster(1000, 0.01, 5, 20, 10, 0.7);
+	GradientBoosting booster(10000, 0.003, 2, 30, 25, 0.5);
 	booster.fit(X_train, Y_train);
 
 	std::vector<double> preds2;
@@ -207,7 +202,24 @@ void gbm_thread(
 	booster.save(gbm_model_file);
 }
 
+void xgb_thread(
+	matrix<double> X_train, matrix<double> X_test, std::vector<double> Y_train, std::vector<double> Y_test, std::string gbm_model_file)
+{
+	XGBoostRegressor model(10000, 0.003, 2, 30, 0.5, 10, 2.0);
+	model.fit(X_train, Y_train);
+
+	std::vector<double> preds3;
+	for (auto i{ 0u }; i < X_test.size(); ++i) {
+		double val = model.predict(X_test[i]);
+		preds3.push_back(val);
+		std::cout << "Real value: " << Y_test[i] << " - Booster Prediction : " << val << "\n";
+	}
+	std::cout << "Xtreme Gradient Boosting RMSE: " << evaluate_RMSE(Y_test, preds3) << "\n";
+	model.save(gbm_model_file);
+}
+
 int main() {
+	
 	std::vector<std::string> predictors = {
 		// "DATE", "HOME", "AWAY", "H_SCORE", "A_SCORE",
 		// "H_FGA", "A_FGA", "H_FG", "A_FG", "H_FG%", "A_FG%", "H_2FGA", "A_2FGA",	"H_2FG", "A_2FG", 
@@ -249,7 +261,6 @@ int main() {
 		const auto& feature = predictors[j];
 		if (basketball_data.find(feature) != basketball_data.end()) {
 			const auto& feature_vec = basketball_data[feature].to_float();
-			keynames.push_back(feature);
 			std::cout << feature << "\n";
 			for (size_t i = 0; i < std::min(feature_vec.size(), Y.size()); ++i) {
 				X[i][j] = feature_vec[i];
@@ -261,38 +272,41 @@ int main() {
 
 	std::string forest_model_file = R"(C:\Users\HP\source\repos\Rehoboam\Rehoboam\Data\Basketball\nba\Forest_model.bin)";
 	std::string gbm_model_file = R"(C:\Users\HP\source\repos\Rehoboam\Rehoboam\Data\Basketball\nba\GBM_model.bin)";
+	std::string xgb_model_file = R"(C:\Users\HP\source\repos\Rehoboam\Rehoboam\Data\Basketball\nba\XGB_model.bin)";
 
-	std::thread worker = std::thread(gbm_thread, X_train, X_test, Y_train, Y_test, gbm_model_file);
+	std::thread worker1 = std::thread(gbm_thread, X_train, X_test, Y_train, Y_test, gbm_model_file);
+	std::thread worker2 = std::thread(xgb_thread, X_train, X_test, Y_train, Y_test, xgb_model_file);
 
-	double feature_ratio = 0.25;
+	double feature_ratio = 0.3;
 	//RandomForest forest(400, 19, 10, 5, feature_ratio);
-	RandomForest forest(700, 14, 20, 10, feature_ratio);
+	RandomForest forest(1000, 10, 25, 10, feature_ratio);
 	forest.fit(X_train, Y_train);
-
+	
 	std::vector<double> preds1;
 	for (auto i{ 0u }; i < X_test.size(); ++i) {
-		auto [val, _1, _2, _3, _4] = forest.predict(X_test[i]);
+		auto val = forest.predict(X_test[i]);
 		preds1.push_back(val);
-		std::cout << "Real value: " << Y_test[i] << " - Forest Prediction : " << val << " ("<<_1<<","<<_2<<","<<_3<<","<<_4<<")\n";
+		std::cout << "Real value: " << Y_test[i] << " - Forest Prediction : " << val << "\n";
 	}
-
+	
 	std::cout << "Forest RMSE: " << evaluate_RMSE(Y_test, preds1) << "\n";
 	forest.save(forest_model_file);
-
+	
 	std::cout << "Random Forest Feature Importance:\n";
 	for (const auto& [i, importance] : forest.computeFeatureImportances()) {
 		std::cout << predictors[i] << ": " << importance << "\n\n";
 	}
 	
-	worker.join();
+	worker1.join();
+	worker2.join();
 	*/
-
 
 	//........................................................................................................
 	//Load saved models
 	
 	std::string forest_model_file = R"(C:\Users\HP\source\repos\Rehoboam\Rehoboam\Data\Basketball\nba\Forest_model.bin)";
 	std::string gbm_model_file = R"(C:\Users\HP\source\repos\Rehoboam\Rehoboam\Data\Basketball\nba\GBM_model.bin)";
+	std::string xgb_model_file = R"(C:\Users\HP\source\repos\Rehoboam\Rehoboam\Data\Basketball\nba\XGB_model.bin)";
 	std::string filename = R"(C:\Users\HP\source\repos\Rehoboam\Rehoboam\Data\Basketball\nba\data_file.csv)";
 
 	RandomForest forest;
@@ -301,6 +315,10 @@ int main() {
 	GradientBoosting booster;
 	booster.load(gbm_model_file);
 
+	XGBoostRegressor xgb;
+	xgb.load(xgb_model_file);
+
+	
 	std::vector<std::string> home_features = {
 		"H_FG%", "H_2FG%", "H_3FG%", "H_FT%",
 		"H_OFF_RATING", "H_DEF_RATING", "H_REST_DAYS",
@@ -360,49 +378,84 @@ int main() {
 		}
 
 		std::cout << home << " VS " << away << ": \n";
-		auto [pred1, prob_220, prob_230, prob_240, prob_250] = forest.predict(X[0]);
+		//auto [pred1, prob_220, prob_230, prob_240, prob_250] = forest.predict(X[0]);
+		auto pred1 = forest.predict(X[0]);
 		auto pred2 = booster.predict(X[0]);
+		auto pred3 = xgb.predict(X[0]);
 
-		stream.str("");
-		stream << prob_220 * 100.0 << "%";
-		std::string over_220_str = stream.str();
-		stream.str("");
-		stream << prob_230 * 100.0 << "%";
-		std::string over_230_str = stream.str();
-		stream.str("");
-		stream << prob_240 * 100.0 << "%";
-		std::string over_240_str = stream.str();
-		stream.str("");
-		stream << prob_250 * 100.0 << "%";
-		std::string over_250_str = stream.str();
+		// stream.str("");
+		// stream << prob_220 * 100.0 << "%";
+		// std::string over_220_str = stream.str();
+		// stream.str("");
+		// stream << prob_230 * 100.0 << "%";
+		// std::string over_230_str = stream.str();
+		// stream.str("");
+		// stream << prob_240 * 100.0 << "%";
+		// std::string over_240_str = stream.str();
+		// stream.str("");
+		// stream << prob_250 * 100.0 << "%";
+		// std::string over_250_str = stream.str();
+		// 
+		// stream.str("");
+		// stream << 1.0 / prob_220;
+		// std::string over_220_odds = stream.str();
+		// stream.str("");
+		// stream << 1.0 / prob_230;
+		// std::string over_230_odds = stream.str();
+		// stream.str("");
+		// stream << 1.0 / prob_240;
+		// std::string over_240_odds = stream.str();
+		// stream.str("");
+		// stream << 1.0 / prob_250;
+		// std::string over_250_odds = stream.str();
 
-		stream.str("");
-		stream << 1.0 / prob_220;
-		std::string over_220_odds = stream.str();
-		stream.str("");
-		stream << 1.0 / prob_230;
-		std::string over_230_odds = stream.str();
-		stream.str("");
-		stream << 1.0 / prob_240;
-		std::string over_240_odds = stream.str();
-		stream.str("");
-		stream << 1.0 / prob_250;
-		std::string over_250_odds = stream.str();
-
-		std::cout << "forest prediction: " << pred1 << "\n";
+		std::cout << "Forest prediction: " << pred1 << "\n";
 		std::cout << "GBM prediction: " << pred2 << "\n";
+		std::cout << "XGB prediction: " << pred3 << "\n\n";
 
-		std::string lines(45, '-');
-		std::cout << std::left << std::setw(15) << "Score Range" << std::left << std::setw(15) << "Probability" << "Odds\n";
-		std::cout << lines << "\n";
+		//	std::string lines(45, '-');
+		//	std::cout << std::left << std::setw(15) << "Score Range" << std::left << std::setw(15) << "Probability" << "Odds\n";
+		//	std::cout << lines << "\n";
 
-		// Use descriptive variables and print the odds column correctly
-		stream << std::setprecision(3);
-		std::cout << std::left << std::setw(15) << "[over 220.5]" << std::left << std::setw(15) << over_220_str << over_220_odds << "\n";
-		std::cout << std::left << std::setw(15) << "[over 230.5]" << std::left << std::setw(15) << over_230_str << over_230_odds << "\n";
-		std::cout << std::left << std::setw(15) << "[over 240.5]" << std::left << std::setw(15) << over_240_str << over_240_odds << "\n";
-		std::cout << std::left << std::setw(15) << "[over 250.5]" << std::left << std::setw(15) << over_250_str << over_250_odds << "\n\n";
+		//	// Use descriptive variables and print the odds column correctly
+		//	stream << std::setprecision(3);
+		//	std::cout << std::left << std::setw(15) << "[over 220.5]" << std::left << std::setw(15) << over_220_str << over_220_odds << "\n";
+		//	std::cout << std::left << std::setw(15) << "[over 230.5]" << std::left << std::setw(15) << over_230_str << over_230_odds << "\n";
+		//	std::cout << std::left << std::setw(15) << "[over 240.5]" << std::left << std::setw(15) << over_240_str << over_240_odds << "\n";
+		//	std::cout << std::left << std::setw(15) << "[over 250.5]" << std::left << std::setw(15) << over_250_str << over_250_odds << "\n\n";
+		//
 	}
-	
 	//.......................................................................................................
+
 }
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+	std::vector<std::vector<double>> X;
+	std::vector<double> y;
+
+	std::mt19937 rng(42);
+	std::uniform_real_distribution<double> noise(-0.2, 0.2);
+
+	for (int i = 1; i <= 2000; ++i) {
+		X.push_back({ static_cast<double>(i) });
+
+		double base_y = 2.0 * i;
+		y.push_back(base_y + (i % 2 == 0 ? 0.1 : -0.1) + noise(rng));
+	}
+
+	XGBoostRegressor model(4000);
+	model.fit(X, y);
+
+	std::cout << "Prediction for x=9: " << model.predict({ 2001 }) << std::endl;
+	*/
