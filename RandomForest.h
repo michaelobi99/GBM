@@ -31,7 +31,6 @@ public:
 		max_depth(max_depth), min_samples_split(min_samples_split), min_samples_leaf(min_samples_leaf), 
 		feature_sample_ratio(feature_sample_ratio), nTrees(nTrees), random_state( random_state )
 	{}
-		
 
 	void fit(const matrix<double>& X, const std::vector<double>& Y) {
 		std::random_device rd;
@@ -57,9 +56,22 @@ public:
 		}
 	}
 
-	std::tuple<double, double, double, double, double> predict(const std::vector<double>& predictors) const {
+	struct RFOutput {
+		double mean = 0;
+		double q25 = 0;
+		double q50 = 0;
+		double q75 = 0;
+		double prob_over_220 = 0;
+		double prob_over_230 = 0;
+		double prob_over_240 = 0;
+		double prob_over_250 = 0;
+		double skewness = 0;
+	};
+
+
+	RFOutput predict(const std::vector<double>& predictors) const {
 		if (trees.size() == 0)
-			return std::tuple{ 0.0, 0.0, 0.0, 0.0, 0.0 };
+			return RFOutput{};
 
 		std::vector<double> predictions(trees.size());
 		std::vector<double> all_samples;
@@ -73,12 +85,21 @@ public:
 				all_samples.push_back(elem);
 			}
 		}
-		double avg = std::accumulate(std::begin(predictions), std::end(predictions), 0.0);
-		avg /= (double)trees.size();
+		double avg = mean(predictions);
+
+		RFOutput result;
+		result.mean = avg;
 
 		if (all_samples.empty()) {
-			return std::tuple{ avg, 0.0, 0.0, 0.0, 0.0 };
+			return result;
 		}
+		result.skewness = skew(all_samples);
+		std::sort(all_samples.begin(), all_samples.end());
+		result.q25 = quantile_sorted(all_samples, 0.25);
+		result.q50 = quantile_sorted(all_samples, 0.50);
+		result.q75 = quantile_sorted(all_samples, 0.75);
+
+
 		int over_220_count{ 0 }, over_230_count{ 0 }, over_240_count{ 0 }, over_250_count{ 0 };
 
 		for (auto elem : all_samples) {
@@ -87,13 +108,14 @@ public:
 			if (elem >= 240) ++over_240_count;
 			if (elem >= 250) ++over_250_count;
 		}
-		double total_samples = (double)all_samples.size();
-		double prob_over_220 = over_220_count / total_samples;
-		double prob_over_230 = over_230_count / total_samples;
-		double prob_over_240 = over_240_count / total_samples;
-		double prob_over_250 = over_250_count / total_samples;
 
-		return std::tuple{ avg, prob_over_220, prob_over_230, prob_over_240, prob_over_250 };
+		double total_samples = (double)all_samples.size();
+		result.prob_over_220 = over_220_count / total_samples;
+		result.prob_over_230 = over_230_count / total_samples;
+		result.prob_over_240 = over_240_count / total_samples;
+		result.prob_over_250 = over_250_count / total_samples;
+
+		return result;
 	}
  
 	std::vector<featureImportance> computeFeatureImportances() {

@@ -198,6 +198,21 @@ public:
         lambda(lambda), gamma(gamma), base_score(base_score), feature_sample_ratio(feature_sample_ratio), random_state{ random_state } {
     }
 
+    XGBoostRegressor(const XGBoostRegressor& other) {
+        this->n_estimators = other.n_estimators;
+        this->max_depth = other.max_depth;
+        this->min_leaf = other.min_leaf;
+        this->eta = other.eta;
+        this->lambda = other.lambda;
+        this->gamma = other.gamma;
+        this->base_score = other.base_score;
+        this->feature_sample_ratio = other.feature_sample_ratio;
+        this->random_state = other.random_state;
+        this->trees.clear();
+        this->trees.resize(other.trees.size());
+        std::copy(other.trees.begin(), other.trees.end(), this->trees.begin());
+    }
+
     ~XGBoostRegressor() {
         for (auto* tree : trees) delete tree;
     }

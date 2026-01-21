@@ -50,7 +50,7 @@ double evaluate_Huber_RMSE(const std::vector<double>& Y_test, const std::vector<
 }
 
 std::tuple<matrix<double>, matrix<double>, std::vector<double>, std::vector<double>>
-train_test_split(const matrix<double>& X, const std::vector<double>& Y, double test_size = 0.10, bool time_based = true, int random_state = -1) {
+train_test_split(const matrix<double>& X, const std::vector<double>& Y, double test_size = 0.20, bool time_based = true, int random_state = -1) {
 	std::vector<int> indices(Y.size(), 0);
 	std::iota(std::begin(indices), std::end(indices), 0);
 	std::random_device rd;
@@ -78,7 +78,57 @@ train_test_split(const matrix<double>& X, const std::vector<double>& Y, double t
 
 	return std::tuple{ X_train,  X_test, Y_train, Y_test };
 }
-//..........................................................................................................................
+
+double sum(const std::vector<double>& array) {
+	return std::accumulate(std::begin(array), std::end(array), 0.0);
+}
+
+double mean(const std::vector<double>& array) {
+	if (array.empty()) return 0.0;
+	return sum(array) / (double)array.size();
+}
+
+double median(std::vector<double> array) {
+	if (array.empty()) return 0.0;
+	std::sort(array.begin(), array.end());
+	size_t n = array.size();
+	if (n % 2 == 1)
+		return array[n / 2];
+	return 0.5 * (array[n / 2 - 1] + array[n / 2]);
+}
+
+double quantile_sorted(std::vector<double> v, double q) {
+	size_t idx = static_cast<size_t>(q * (v.size() - 1));
+	double result = v[idx];
+	return result;
+}
+
+double variance(std::vector<double>& array) {
+	double avg = mean(array);
+	size_t N = array.size();
+	double result = 0.0;
+	for (size_t i{ 0 }; i < N; ++i) {
+		result += (array[i] - avg) * (array[i] - avg);
+	}
+	result /= (double)N;
+	return result;
+}
+
+double skew(std::vector<double>& array) {
+	double avg = mean(array);
+	size_t N = array.size();
+	double result = 0.0;
+	for (size_t i{ 0 }; i < N; ++i) {
+		result += (array[i] - avg) * (array[i] - avg) * (array[i] - avg);
+	}
+	result /= (double)N;
+	double var = variance(array);
+	var = std::pow(var, 1.5);
+	if (var < 1e-9) return 0.0;
+	result /= var;
+	return result;
+}
+//.......................................................................................................................................................
 
 
 struct TreeNode {
@@ -306,24 +356,6 @@ private:
 		node->left = build_tree(X, Y, left_indices, depth + 1);
 		node->right = build_tree(X, Y, right_indices, depth + 1);
 		return node;
-	}
-
-	double sum(const std::vector<double>& array) {
-		return std::accumulate(std::begin(array), std::end(array), 0.0);
-	}
-
-	double mean(const std::vector<double>& array) {
-		if (array.empty()) return 0.0;
-		return sum(array) / (double)array.size();
-	}
-
-	double median(std::vector<double> array) {
-		if (array.empty()) return 0.0;
-		std::sort(array.begin(), array.end());
-		size_t n = array.size();
-		if (n % 2 == 1)
-			return array[n / 2];
-		return 0.5 * (array[n / 2 - 1] + array[n / 2]);
 	}
 
 	void serialize(std::fstream& model_file, TreeNode* node) {

@@ -23,6 +23,21 @@ public:
           loss(loss), random_state(random_state)
     {}
 
+    GradientBoosting(const GradientBoosting& other) {
+        this->learning_rate = other.learning_rate;
+        this->n_estimators = other.n_estimators;
+        this->max_depth = other.max_depth;
+        this->min_samples_split = other.min_samples_split;
+        this->min_samples_leaf = other.min_samples_leaf;
+        this->random_state = other.random_state;
+        this->feature_sample_ratio = other.feature_sample_ratio;
+        this->initial_prediction = other.initial_prediction;
+        this->loss = other.loss;
+        this->trees.clear();
+        this->trees.resize(other.trees.size());
+        std::copy(other.trees.begin(), other.trees.end(), this->trees.begin());
+    }
+
     ~GradientBoosting() {
         for (auto* tree : trees) delete tree;
     }
